@@ -195,7 +195,7 @@
   }
 
   .nav-link {
-    @apply relative px-4 py-2 text-muted-foreground hover:text-foreground transition-colors duration-300;
+    @apply relative px-4 py-2 text-muted-foreground hover:text-foreground transition-colors duration-300 min-h-[40px] flex items-center justify-center;
   }
 
   .nav-link.active {

@@ -99,3 +99,14 @@ export function openModal() {
 export function closeModal() {
   appKit.close();
 }
+
+// Re-export mobile MetaMask utilities for convenience
+export {
+  isMobile,
+  isMetaMaskInstalled,
+  openMetaMask,
+  connectMetaMask,
+  smartConnect,
+  generateMetaMaskLink,
+  getConnectionMethod
+} from './metamaskMobile';

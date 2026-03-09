@@ -135,7 +135,7 @@ const AddSepoliaButton: React.FC = () => {
         disabled={isAdding}
         variant="outline"
         size="sm"
-        className="gap-2"
+        className="gap-2 h-10"
       >
         <Network className="w-4 h-4" />
         {isAdding ? 'Adding...' : 'Add Sepolia'}
@@ -146,7 +146,7 @@ const AddSepoliaButton: React.FC = () => {
         disabled={isAdding}
         variant="outline"
         size="sm"
-        className="gap-2 border-primary/50 text-primary hover:bg-primary/10"
+        className="gap-2 border-primary/50 text-primary hover:bg-primary/10 h-10"
       >
         <Network className="w-4 h-4" />
         {isAdding ? 'Switching...' : 'Switch to Sepolia'}

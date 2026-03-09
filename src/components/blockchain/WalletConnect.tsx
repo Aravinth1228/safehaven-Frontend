@@ -1,5 +1,6 @@
 import React from 'react';
 import { useWallet } from '../../contexts/WalletContext';
+import { isMobile, isMetaMaskInstalled } from '../../lib/metamaskMobile';
 
 // Add CSS animation for spinner
 const style = document.createElement('style');
@@ -17,20 +18,33 @@ if (typeof document !== 'undefined' && !document.querySelector('style[data-walle
 /**
  * WalletConnect Component
  *
- * Provides wallet connection UI using Reown AppKit (WalletConnect)
- * Supports:
- * - MetaMask (browser extension)
- * - WalletConnect (mobile wallets: Trust Wallet, Rainbow, etc.)
- * - All WalletConnect-compatible wallets
+ * Smart wallet connection with automatic device detection:
+ * - Mobile: Opens MetaMask app via deep link (free, no API keys)
+ * - Desktop with MetaMask: Connects to extension directly
+ * - Desktop without MetaMask: Falls back to WalletConnect
  */
 export function WalletConnect() {
-  const { 
-    walletAddress, 
-    isConnected, 
-    connectWallet, 
-    disconnectWallet, 
-    isConnecting 
+  const {
+    walletAddress,
+    isConnected,
+    connectWallet,
+    disconnectWallet,
+    isConnecting
   } = useWallet();
+
+  const isMobileDevice = isMobile();
+  const hasMetaMask = isMetaMaskInstalled();
+
+  // Get connection method description
+  const getConnectionHint = () => {
+    if (isMobileDevice) {
+      return 'Opens MetaMask app';
+    }
+    if (hasMetaMask) {
+      return 'Connect with MetaMask';
+    }
+    return 'Connect with WalletConnect';
+  };
 
   // Format address for display (0x1234...5678)
   const formatAddress = (addr: string) => {
@@ -43,6 +57,7 @@ export function WalletConnect() {
       await connectWallet();
     } catch (error: any) {
       console.error('Failed to connect:', error);
+      // Error is already user-friendly from connectWallet
     }
   };
 
@@ -61,20 +76,25 @@ export function WalletConnect() {
           onClick={handleConnect}
           disabled={isConnecting}
           className="connect-wallet-btn"
+          title={getConnectionHint()}
           style={{
-            padding: '12px 24px',
+            padding: '10px 20px',
             borderRadius: '12px',
             border: 'none',
             background: 'linear-gradient(135deg, #FF0066 0%, #FF6B00 100%)',
             color: 'white',
             fontWeight: '700',
-            fontSize: '15px',
+            fontSize: '14px',
             cursor: isConnecting ? 'not-allowed' : 'pointer',
             opacity: isConnecting ? 0.7 : 1,
             boxShadow: '0 4px 20px rgba(255, 0, 102, 0.5)',
             transition: 'all 0.3s ease',
             position: 'relative',
             overflow: 'hidden',
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'translateY(-2px)';
@@ -97,15 +117,29 @@ export function WalletConnect() {
             </span>
           ) : (
             <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>🔗</span>
-              Connect Wallet
+              {isMobileDevice ? (
+                <>
+                  <span>📱</span>
+                  <span>Connect Wallet</span>
+                </>
+              ) : hasMetaMask ? (
+                <>
+                  <span>🦊</span>
+                  <span>Connect MetaMask</span>
+                </>
+              ) : (
+                <>
+                  <span>🔗</span>
+                  <span>Connect Wallet</span>
+                </>
+              )}
             </span>
           )}
         </button>
       ) : (
-        <div className="wallet-info" style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div className="wallet-info" style={{
+          display: 'flex',
+          alignItems: 'center',
           gap: '10px',
           padding: '8px 16px',
           background: 'linear-gradient(135deg, #FF0066 0%, #FF6B00 100%)',
@@ -114,9 +148,9 @@ export function WalletConnect() {
           boxShadow: '0 4px 20px rgba(255, 0, 102, 0.4)',
           color: 'white'
         }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
             gap: '8px',
             backgroundColor: 'rgba(255, 255, 255, 0.2)',
             padding: '6px 12px',
@@ -140,6 +174,10 @@ export function WalletConnect() {
               fontSize: '13px',
               backdropFilter: 'blur(10px)',
               transition: 'all 0.3s ease',
+              height: '32px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.4)';

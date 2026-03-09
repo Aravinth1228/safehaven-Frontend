@@ -67,7 +67,7 @@ const Navbar: React.FC = () => {
                 variant="ghost"
                 size="sm"
                 onClick={handleLogout}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground h-10"
               >
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout

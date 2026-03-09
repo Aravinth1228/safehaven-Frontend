@@ -7,10 +7,20 @@ import { ethers } from 'ethers';
 // IMPORTANT: Get your own from https://cloud.reown.com
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '8e28c9e8e8e8e8e8e8e8e8e8e8e8e8e8';
 
-// Define networks
-const networks = [sepolia, mainnet];
+// Define networks with proper chain configuration
+const networks = [
+  {
+    ...sepolia,
+    rpcUrls: {
+      default: {
+        http: ['https://sepolia.infura.io/v3/']
+      }
+    }
+  },
+  mainnet
+];
 
-// Create AppKit instance
+// Create AppKit instance with mobile-optimized settings
 export const appKit = createAppKit({
   adapters: [new EthersAdapter()],
   networks,
@@ -26,10 +36,20 @@ export const appKit = createAppKit({
     '--w3m-accent': '#3b82f6',
     '--w3m-color-mix': '#3b82f6',
   },
+  // Enable all connection methods for mobile
   features: {
     email: false,
     socials: false,
-  }
+    analytics: true,
+    allWallets: true,
+  },
+  // Mobile-specific configuration
+  enableWallets: true,
+  includeWalletIds: [
+    'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
+    '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0', // Trust Wallet
+    '1ae92b26df02f0abca6304df07debccd18262fdf5fe82daa81593582dac9a369', // Rainbow
+  ],
 });
 
 // Helper to get provider and signer

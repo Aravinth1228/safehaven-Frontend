@@ -110,11 +110,13 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       // Open WalletConnect modal (works on both mobile and desktop)
       openModal();
       
+      console.log('📱 WalletConnect modal opened - select MetaMask or any wallet');
+      
       // Wait for connection (handled by subscription above)
       // Give it time to connect
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
-          reject(new Error('Connection timeout'));
+          reject(new Error('Connection timeout. Please try again.'));
         }, 120000); // 2 minutes timeout
 
         const checkConnection = setInterval(() => {
@@ -130,28 +132,42 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     } catch (error: any) {
       console.error('❌ WalletConnect connection failed:', error);
       
-      // Fallback to direct MetaMask if WalletConnect fails
-      if (!window.ethereum) {
-        throw new Error('No wallet available. Please install MetaMask or use WalletConnect.');
+      // If on mobile and WalletConnect fails, try direct MetaMask
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile && window.ethereum?.isMetaMask) {
+        console.log('📱 MetaMask detected on mobile, trying direct connection...');
+        
+        try {
+          const accounts = await window.ethereum.request({
+            method: 'eth_requestAccounts',
+          }) as string[];
+
+          if (accounts.length > 0) {
+            const address = accounts[0];
+            console.log('✅ Wallet connected via MetaMask:', address);
+
+            setWalletAddress(address);
+            localStorage.setItem('walletAddress', address);
+
+            const prov = new ethers.BrowserProvider(window.ethereum);
+            const sgnr = await prov.getSigner();
+            setSigner(sgnr);
+            setProvider(prov);
+            
+            return; // Success!
+          }
+        } catch (metaMaskError) {
+          console.error('MetaMask direct connection failed:', metaMaskError);
+        }
       }
       
-      console.log('🔄 Falling back to direct MetaMask...');
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts',
-      }) as string[];
-
-      if (accounts.length > 0) {
-        const address = accounts[0];
-        console.log('✅ Wallet connected via MetaMask:', address);
-
-        setWalletAddress(address);
-        localStorage.setItem('walletAddress', address);
-
-        const prov = new ethers.BrowserProvider(window.ethereum);
-        const sgnr = await prov.getSigner();
-        setSigner(sgnr);
-        setProvider(prov);
-      }
+      // Show user-friendly error
+      throw new Error(
+        isMobile 
+          ? 'Could not connect to MetaMask. Please make sure MetaMask app is installed and try again.'
+          : error.message || 'Failed to connect wallet'
+      );
     } finally {
       setIsConnecting(false);
     }

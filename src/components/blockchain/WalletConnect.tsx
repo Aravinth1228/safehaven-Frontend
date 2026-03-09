@@ -1,6 +1,19 @@
 import React from 'react';
 import { useWallet } from '../../contexts/WalletContext';
 
+// Add CSS animation for spinner
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+`;
+if (typeof document !== 'undefined' && !document.querySelector('style[data-wallet-connect]')) {
+  style.setAttribute('data-wallet-connect', 'true');
+  document.head.appendChild(style);
+}
+
 /**
  * WalletConnect Component
  *
@@ -49,17 +62,45 @@ export function WalletConnect() {
           disabled={isConnecting}
           className="connect-wallet-btn"
           style={{
-            padding: '10px 20px',
-            borderRadius: '8px',
+            padding: '12px 24px',
+            borderRadius: '12px',
             border: 'none',
-            backgroundColor: '#3b82f6',
+            background: 'linear-gradient(135deg, #FF0066 0%, #FF6B00 100%)',
             color: 'white',
-            fontWeight: '600',
+            fontWeight: '700',
+            fontSize: '15px',
             cursor: isConnecting ? 'not-allowed' : 'pointer',
             opacity: isConnecting ? 0.7 : 1,
+            boxShadow: '0 4px 20px rgba(255, 0, 102, 0.5)',
+            transition: 'all 0.3s ease',
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 6px 30px rgba(255, 0, 102, 0.7)';
+            e.currentTarget.style.background = 'linear-gradient(135deg, #FF3385 0%, #FF8533 100%)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 20px rgba(255, 0, 102, 0.5)';
+            e.currentTarget.style.background = 'linear-gradient(135deg, #FF0066 0%, #FF6B00 100%)';
           }}
         >
-          {isConnecting ? 'Connecting...' : '🔗 Connect Wallet'}
+          {isConnecting ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <svg style={{ animation: 'spin 1s linear infinite' }} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                <path d="M12 2a10 10 0 0 1 10 10" strokeOpacity="1" />
+              </svg>
+              Connecting...
+            </span>
+          ) : (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>🔗</span>
+              Connect Wallet
+            </span>
+          )}
         </button>
       ) : (
         <div className="wallet-info" style={{ 
@@ -67,18 +108,21 @@ export function WalletConnect() {
           alignItems: 'center', 
           gap: '10px',
           padding: '8px 16px',
-          backgroundColor: '#f3f4f6',
-          borderRadius: '8px',
-          fontSize: '14px'
+          background: 'linear-gradient(135deg, #FF0066 0%, #FF6B00 100%)',
+          borderRadius: '12px',
+          fontSize: '14px',
+          boxShadow: '0 4px 20px rgba(255, 0, 102, 0.4)',
+          color: 'white'
         }}>
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
             gap: '8px',
-            backgroundColor: '#10b981',
-            padding: '4px 12px',
-            borderRadius: '6px',
-            color: 'white'
+            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+            padding: '6px 12px',
+            borderRadius: '8px',
+            backdropFilter: 'blur(10px)',
+            fontWeight: '600'
           }}>
             <span>🟢</span>
             <span>{formatAddress(walletAddress!)}</span>
@@ -86,14 +130,24 @@ export function WalletConnect() {
           <button
             onClick={handleDisconnect}
             style={{
-              padding: '6px 12px',
-              borderRadius: '6px',
-              border: '1px solid #ef4444',
-              backgroundColor: 'white',
-              color: '#ef4444',
-              fontWeight: '500',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              border: '2px solid rgba(255, 255, 255, 0.5)',
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              color: 'white',
+              fontWeight: '600',
               cursor: 'pointer',
-              fontSize: '13px'
+              fontSize: '13px',
+              backdropFilter: 'blur(10px)',
+              transition: 'all 0.3s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.4)';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+              e.currentTarget.style.transform = 'scale(1)';
             }}
           >
             Disconnect

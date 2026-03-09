@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useWallet } from '@/contexts/WalletContext';
 import { useAuth } from '@/contexts/AuthContext';
 import AddSepoliaButton from '@/components/blockchain/AddSepoliaButton';
+import { WalletConnect } from '@/components/blockchain/WalletConnect';
 
 const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -59,12 +60,8 @@ const Navbar: React.FC = () => {
           {/* Wallet & Auth Status */}
           <div className="hidden md:flex items-center gap-4">
             <AddSepoliaButton />
-            {isConnected && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted border border-border">
-                <Wallet className="w-4 h-4 text-primary" />
-                <span className="text-sm font-mono">{truncateAddress(walletAddress!)}</span>
-              </div>
-            )}
+            {/* Connect Wallet Button */}
+            <WalletConnect />
             {isAuthenticated && (
               <Button
                 variant="ghost"
@@ -98,7 +95,7 @@ const Navbar: React.FC = () => {
                 </p>
                 <AddSepoliaButton />
               </div>
-              
+
               {navLinks.map((link) => (
                 <Link
                   key={link.path}
@@ -113,6 +110,12 @@ const Navbar: React.FC = () => {
                   {link.label}
                 </Link>
               ))}
+              
+              {/* Connect Wallet for Mobile */}
+              <div className="px-4 py-2">
+                <WalletConnect />
+              </div>
+              
               {isConnected && (
                 <div className="flex items-center gap-2 px-4 py-2 mt-2 border-t border-border/50">
                   <Wallet className="w-4 h-4 text-primary" />

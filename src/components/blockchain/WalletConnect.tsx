@@ -1,5 +1,4 @@
 import React from 'react';
-import { useBlockchain } from '../hooks/useBlockchain';
 import { useWallet } from '../../contexts/WalletContext';
 
 /**
@@ -12,13 +11,13 @@ import { useWallet } from '../../contexts/WalletContext';
  * - All WalletConnect-compatible wallets
  */
 export function WalletConnect() {
-  const {
-    isConnected,
-    address,
-    disconnect
-  } = useBlockchain();
-
-  const { connectWallet, disconnectWallet, isConnecting } = useWallet();
+  const { 
+    walletAddress, 
+    isConnected, 
+    connectWallet, 
+    disconnectWallet, 
+    isConnecting 
+  } = useWallet();
 
   // Format address for display (0x1234...5678)
   const formatAddress = (addr: string) => {
@@ -37,7 +36,6 @@ export function WalletConnect() {
   const handleDisconnect = async () => {
     try {
       await disconnectWallet();
-      disconnect();
     } catch (error: any) {
       console.error('Failed to disconnect:', error);
     }
@@ -61,7 +59,7 @@ export function WalletConnect() {
             opacity: isConnecting ? 0.7 : 1,
           }}
         >
-          {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+          {isConnecting ? 'Connecting...' : '🔗 Connect Wallet'}
         </button>
       ) : (
         <div className="wallet-info" style={{ 
@@ -83,7 +81,7 @@ export function WalletConnect() {
             color: 'white'
           }}>
             <span>🟢</span>
-            <span>{formatAddress(address!)}</span>
+            <span>{formatAddress(walletAddress!)}</span>
           </div>
           <button
             onClick={handleDisconnect}

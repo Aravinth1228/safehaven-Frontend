@@ -10,8 +10,8 @@ import {
   openModal
 } from '../lib/walletConnect';
 import {
-  isMobile,
-  isMetaMaskInstalled,
+  isMobile as checkIsMobile,
+  isMetaMaskInstalled as checkIsMetaMaskInstalled,
   openMetaMask,
   connectMetaMask,
   smartConnect
@@ -115,17 +115,17 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       console.log('🔗 Connecting wallet...');
 
       // Check if mobile device
-      if (isMobile()) {
+      if (checkIsMobile()) {
         console.log('📱 Mobile device detected - using MetaMask deep link');
-        
+
         // Open MetaMask app via deep link
         openMetaMask();
-        
+
         // On mobile, we redirect to MetaMask app
         // The user will be redirected back after approval
         // We'll wait for the connection to be established via the subscription
         console.log('📱 Redirecting to MetaMask app...');
-        
+
         // Wait for connection (handled by subscription when user returns)
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => {
@@ -140,15 +140,15 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
             }
           }, 500);
         });
-        
+
         console.log('✅ Wallet connected via MetaMask mobile');
         return;
       }
 
       // Desktop: Check for MetaMask extension
-      if (isMetaMaskInstalled()) {
+      if (checkIsMetaMaskInstalled()) {
         console.log('🖥️ Desktop with MetaMask - using extension');
-        
+
         try {
           const address = await connectMetaMask();
           setWalletAddress(address);
@@ -158,7 +158,7 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
           const sgnr = await prov.getSigner();
           setSigner(sgnr);
           setProvider(prov);
-          
+
           console.log('✅ Wallet connected via MetaMask extension:', address);
           return;
         } catch (error: any) {
@@ -193,11 +193,11 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
       console.error('❌ Wallet connection failed:', error);
 
       // Show user-friendly error
-      if (isMobile()) {
+      if (checkIsMobile()) {
         throw new Error(
           'Could not connect to MetaMask. Please make sure MetaMask app is installed and try again.'
         );
-      } else if (!isMetaMaskInstalled()) {
+      } else if (!checkIsMetaMaskInstalled()) {
         throw new Error(
           'MetaMask not detected. Please install MetaMask extension or use WalletConnect.'
         );

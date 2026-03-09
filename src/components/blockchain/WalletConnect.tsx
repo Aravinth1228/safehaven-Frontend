@@ -1,6 +1,6 @@
 import React from 'react';
 import { useWallet } from '../../contexts/WalletContext';
-import { isMobile, isMetaMaskInstalled } from '../../lib/metamaskMobile';
+import { isMobile as checkIsMobile, isMetaMaskInstalled as checkIsMetaMaskInstalled } from '../../lib/metamaskMobile';
 
 // Add CSS animation for spinner
 const style = document.createElement('style');
@@ -32,8 +32,8 @@ export function WalletConnect() {
     isConnecting
   } = useWallet();
 
-  const isMobileDevice = isMobile();
-  const hasMetaMask = isMetaMaskInstalled();
+  const isMobileDevice = checkIsMobile();
+  const hasMetaMask = checkIsMetaMaskInstalled();
 
   // Get connection method description
   const getConnectionHint = () => {

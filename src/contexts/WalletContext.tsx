@@ -114,11 +114,42 @@ export const WalletProvider: React.FC<WalletProviderProps> = ({ children }) => {
     try {
       console.log('🔗 Connecting wallet...');
 
+      // Check if running on localhost (MetaMask deep link not supported)
+      const isLocalhost = window.location.hostname === 'localhost' || 
+                          window.location.hostname === '127.0.0.1';
+
       // Check if mobile device
       if (checkIsMobile()) {
-        console.log('📱 Mobile device detected - using MetaMask deep link');
+        console.log('📱 Mobile device detected');
+        
+        if (isLocalhost) {
+          // On localhost, use WalletConnect instead of MetaMask deep link
+          console.log('🔗 Localhost detected - using WalletConnect (MetaMask deep link requires HTTPS)');
+          openModal();
+          
+          console.log('📱 WalletConnect modal opened - scan QR code with MetaMask mobile');
+          
+          // Wait for connection (handled by subscription)
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error('Connection timeout. Please try again.'));
+            }, 120000);
 
-        // Open MetaMask app via deep link
+            const checkConnection = setInterval(() => {
+              if (isWalletConnectConnected()) {
+                clearInterval(checkConnection);
+                clearTimeout(timeout);
+                resolve(true);
+              }
+            }, 500);
+          });
+          
+          console.log('✅ Wallet connected via WalletConnect');
+          return;
+        }
+        
+        // Production HTTPS domain - use MetaMask deep link
+        console.log('📱 Using MetaMask deep link');
         openMetaMask();
 
         // On mobile, we redirect to MetaMask app

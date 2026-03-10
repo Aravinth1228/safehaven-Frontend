@@ -86,11 +86,11 @@ export async function connectMetaMask(): Promise<string> {
 
 /**
  * Smart connect: Automatically chooses the right method based on device
- * 
- * - Mobile: Opens MetaMask app via deep link
+ *
+ * - Mobile: Opens MetaMask app via deep link (ONLY for production HTTPS domains)
  * - Desktop with MetaMask: Connects to extension
  * - Desktop without MetaMask: Throws error (user needs to install)
- * 
+ *
  * @param options - Optional configuration
  * @param options.dappUrl - Custom DApp URL for mobile deep link
  * @param options.onMobileRedirect - Callback when redirecting to mobile app
@@ -103,7 +103,18 @@ export async function smartConnect(options?: {
   onDesktopConnect?: (address: string) => void;
 }): Promise<string | void> {
   if (isMobile()) {
-    console.log('📱 Mobile device detected - opening MetaMask app');
+    console.log('📱 Mobile device detected');
+    
+    // Check if running on localhost (not supported by MetaMask deep link)
+    const isLocalhost = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1';
+    
+    if (isLocalhost) {
+      console.warn('⚠️ MetaMask deep link not supported for localhost. Use WalletConnect instead.');
+      throw new Error('MetaMask deep link requires HTTPS domain. Use WalletConnect for local testing.');
+    }
+    
+    console.log('📱 Opening MetaMask app');
     options?.onMobileRedirect?.();
     openMetaMask(options?.dappUrl);
     // Note: On mobile, we redirect and don't return immediately

@@ -123,23 +123,6 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
     });
 
-    // Subscribe to AppKit wallet provider changes (specifically for WalletConnect)
-    const unsubscribeWallet = appKit.subscribeWallet((state) => {
-      console.log('🔔 AppKit wallet state changed:', state);
-      if (state?.address && walletAddress === state.address) {
-        // Same address, check if provider is now available
-        if (!provider) {
-          console.log('🔄 Wallet provider updated, trying to get provider...');
-          getProvider().then((prov) => {
-            if (prov) {
-              setProvider(new ethers.BrowserProvider(prov as any));
-              console.log('✅ Got provider from wallet subscription');
-            }
-          }).catch(console.error);
-        }
-      }
-    });
-
     // Listen for MetaMask extension account changes (desktop)
     const handleAccountsChanged = (accounts: unknown) => {
       const accs = accounts as string[];
@@ -157,7 +140,6 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     return () => {
       unsubscribe();
-      unsubscribeWallet();
       window.ethereum?.removeListener('accountsChanged', handleAccountsChanged);
     };
   }, []);

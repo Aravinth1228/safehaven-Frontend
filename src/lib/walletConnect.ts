@@ -41,11 +41,11 @@ export const appKit = createAppKit({
 export async function getProvider() {
   // Wait for AppKit to be ready
   let attempts = 0;
-  const maxAttempts = 40; // Increased for WalletConnect mobile app
+  const maxAttempts = 40;
 
   while (attempts < maxAttempts) {
     try {
-      // Try getting provider from AppKit - this works with WalletConnect
+      // Try getting provider from AppKit
       const provider = await appKit.getProvider();
       if (provider) {
         console.log('✅ Got provider from AppKit (attempt ' + attempts + ')');
@@ -55,26 +55,28 @@ export async function getProvider() {
       console.warn('⚠️ getProvider() attempt ' + attempts + ' failed:', err);
     }
 
-    // Check connection state
+    // Check connection state - use ADDRESS instead of isConnected (mobile bug)
+    const address = appKit.getAddress();
     const state = appKit.getState();
-    if (state.isConnected && state.address) {
-      console.log('🔍 WalletConnect connected:', state.address, '- waiting for provider...');
+    
+    if (address) {
+      console.log('🔍 WalletConnect connected:', address, '- waiting for provider...');
     }
 
     attempts++;
     if (attempts <= 15 || attempts % 10 === 0) {
-      console.log(`⏳ Waiting for WalletConnect provider... (${attempts}/${maxAttempts})`);
+      console.log(`⏳ Waiting for WalletConnect provider... (${attempts}/${maxAttempts}) Address: ${address || 'none'}`);
     }
     await new Promise(resolve => setTimeout(resolve, 500));
   }
 
   // Final check - get full AppKit state
+  const address = appKit.getAddress();
   const state = appKit.getState();
-  console.log('🔍 Final AppKit state:', state);
+  console.log('🔍 Final AppKit state:', state, 'Address:', address);
 
-  // For WalletConnect mobile app, try to get provider from wallet info
-  if (state.isConnected && state.address) {
-    // Try getting provider one more time
+  // If we have an address but no provider, try one more time
+  if (address) {
     try {
       const provider = await appKit.getProvider();
       if (provider) {

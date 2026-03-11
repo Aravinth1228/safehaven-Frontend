@@ -171,22 +171,26 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.log('📍 Opening AppKit modal...');
       openModal();
 
-      // Wait for connection and log the result
+      // Wait for connection - check for ADDRESS instead of isConnected flag
       let attempts = 0;
-      const maxAttempts = 60; // 30 seconds total (500ms * 60) - WalletConnect mobile app takes time
+      const maxAttempts = 60; // 30 seconds total
 
       while (attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
         const address = appKit.getAddress();
-        const connected = appKit.getState().isConnected;
+        const state = appKit.getState();
+        
+        // Log less frequently to reduce noise
+        if (attempts < 10 || attempts % 10 === 0) {
+          console.log(`🔍 Waiting for WalletConnect... (${attempts + 1}/${maxAttempts}) Address: ${address}, State:`, state);
+        }
 
-        console.log(`🔍 Waiting for WalletConnect... (${attempts + 1}/${maxAttempts}) Address: ${address}, Connected: ${connected}`);
-
-        if (address && connected) {
+        // Check for ADDRESS instead of isConnected (AppKit bug on mobile)
+        if (address) {
           console.log('✅ Wallet connected successfully:', address);
           // Wait extra time for WalletConnect mobile app provider to initialize
           console.log('⏳ Waiting for WalletConnect provider to initialize...');
-          await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+          await new Promise(resolve => setTimeout(resolve, 3000));
           break;
         }
         attempts++;

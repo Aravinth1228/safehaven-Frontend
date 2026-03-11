@@ -83,14 +83,6 @@ appKit.subscribeAccount(async (state) => {
   }
 });
 
-// Also subscribe to wallet events for additional reliability
-appKit.subscribeWallet((state) => {
-  console.log('🔔 AppKit wallet state changed:', state);
-  if (state?.address) {
-    cachedAddress = state.address;
-  }
-});
-
 /**
  * Get Provider - NO POLLING, state-driven
  */

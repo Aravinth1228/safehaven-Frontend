@@ -49,3 +49,27 @@ export function getConnectionMethod(): 'mobile' | 'desktop-metamask' | 'desktop-
   if (isMetaMaskInstalled()) return 'desktop-metamask';
   return 'desktop-no-metamask';
 }
+
+/**
+ * Check if we're in MetaMask's mobile browser (after opening from MetaMask app)
+ * MetaMask mobile browser injects ethereum provider
+ */
+export function isInMetaMaskBrowser(): boolean {
+  return isMetaMaskInstalled();
+}
+
+/**
+ * Wait for MetaMask to be available (for mobile deep link return)
+ */
+export async function waitForMetaMask(timeout = 5000): Promise<boolean> {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < timeout) {
+    if (isMetaMaskInstalled()) {
+      return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  return false;
+}

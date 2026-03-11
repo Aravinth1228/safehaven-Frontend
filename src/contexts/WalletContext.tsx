@@ -58,7 +58,10 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     // Restore session — check if already connected via AppKit
     const existingAddress = appKit.getAddress();
+    console.log('🔍 Checking existing connection:', existingAddress);
+    
     if (existingAddress && isWalletConnectConnected()) {
+      console.log('✅ Restoring AppKit session:', existingAddress);
       setWalletAddress(existingAddress);
       getSigner().then(setSigner).catch(console.error);
       getProvider().then((prov) => {
@@ -66,13 +69,14 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }).catch(console.error);
     }
 
-    // Restore MetaMask extension session (desktop)
+    // Restore MetaMask extension session (desktop only)
     if (!checkIsMobile() && checkIsMetaMaskInstalled() && !existingAddress) {
       window.ethereum
         ?.request({ method: 'eth_accounts' })
         .then((accounts) => {
           const accs = accounts as string[];
           if (accs.length > 0) {
+            console.log('✅ Restored MetaMask extension session:', accs[0]);
             setWalletAddress(accs[0]);
             const prov = new ethers.BrowserProvider(window.ethereum!);
             prov.getSigner().then(setSigner).catch(console.error);
@@ -82,7 +86,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         .catch(console.error);
     }
 
-    // Subscribe to AppKit connection changes (handles mobile return + WalletConnect)
+    // Subscribe to AppKit connection changes (handles mobile + WalletConnect)
     const unsubscribe = onConnectionChange(async (connected, address) => {
       console.log('🔔 AppKit state changed:', connected, address);
       if (connected && address) {
@@ -90,16 +94,21 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         try {
           const s = await getSigner();
           setSigner(s);
+          console.log('✅ Got signer:', s);
         } catch (err) {
           console.error('Could not get signer:', err);
         }
         try {
           const prov = await getProvider();
-          if (prov) setProvider(new ethers.BrowserProvider(prov as any));
+          if (prov) {
+            setProvider(new ethers.BrowserProvider(prov as any));
+            console.log('✅ Got provider');
+          }
         } catch (err) {
           console.error('Could not get provider:', err);
         }
       } else {
+        console.log('🔴 Wallet disconnected');
         setWalletAddress(null);
         setSigner(null);
         setProvider(null);
@@ -110,8 +119,10 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const handleAccountsChanged = (accounts: unknown) => {
       const accs = accounts as string[];
       if (accs.length > 0) {
+        console.log('🔄 MetaMask account changed:', accs[0]);
         setWalletAddress(accs[0]);
       } else {
+        console.log('🔴 MetaMask disconnected');
         setWalletAddress(null);
         setSigner(null);
         setProvider(null);
@@ -128,23 +139,19 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const connectWallet = async () => {
     setIsConnecting(true);
     try {
-      // Check if mobile - use MetaMask deep link
-      if (checkIsMobile()) {
-        // For mobile, open MetaMask app
-        const { openMetaMask } = await import('../lib/metamaskMobile');
-        openMetaMask();
-      } else if (checkIsMetaMaskInstalled()) {
-        // Desktop with MetaMask extension
-        const address = await connectMetaMask();
-        setWalletAddress(address);
-        const prov = new ethers.BrowserProvider(window.ethereum!);
-        const s = await prov.getSigner();
-        setSigner(s);
-        setProvider(prov);
-      } else {
-        // Desktop without MetaMask - use AppKit modal (WalletConnect)
-        openModal();
-      }
+      console.log('🔗 Connecting wallet... Mobile:', checkIsMobile(), 'MetaMask:', checkIsMetaMaskInstalled());
+      
+      // Use AppKit for ALL connections (mobile + desktop)
+      // AppKit automatically handles:
+      // - Mobile: MetaMask app + WalletConnect
+      // - Desktop: MetaMask extension + WalletConnect
+      openModal();
+      
+      // Wait for connection and log the result
+      setTimeout(() => {
+        const address = appKit.getAddress();
+        console.log('📍 Connection attempt - Address:', address);
+      }, 2000);
     } catch (error) {
       console.error('Failed to connect wallet:', error);
       throw error;

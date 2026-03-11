@@ -4,33 +4,63 @@ import { useWallet } from '../../contexts/WalletContext';
 // ─────────────────────────────────────────────────────────────────────────────
 // WalletConnect Component
 // Uses Reown AppKit - handles mobile + desktop automatically
-// Mobile  → MetaMask app deep link + WalletConnect QR
-// Desktop → MetaMask extension + WalletConnect QR
+// Mobile  → MetaMask app + WalletConnect
+// Desktop → MetaMask extension + WalletConnect
 // ─────────────────────────────────────────────────────────────────────────────
 export function WalletConnect() {
-  const { connectWallet, isConnected, walletAddress } = useWallet();
+  const { connectWallet, isConnected, walletAddress, isConnecting } = useWallet();
 
   const truncateAddress = (address: string) => {
+    if (!address) return '';
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const handleClick = async () => {
+    console.log('🔗 Connect button clicked, connected:', isConnected, 'address:', walletAddress);
+    await connectWallet();
   };
 
   return (
     <button
-      onClick={connectWallet}
+      onClick={handleClick}
+      disabled={isConnecting}
       className="wallet-connect-btn"
       style={{
         padding: '10px 20px',
         borderRadius: '8px',
         border: 'none',
-        background: 'linear-gradient(135deg, #FF0066 0%, #FF6B00 100%)',
+        background: isConnecting
+          ? '#ccc'
+          : 'linear-gradient(135deg, #FF0066 0%, #FF6B00 100%)',
         color: 'white',
         fontWeight: '600',
         fontSize: '14px',
-        cursor: 'pointer',
+        cursor: isConnecting ? 'not-allowed' : 'pointer',
         transition: 'all 0.3s ease',
+        minWidth: '140px',
       }}
     >
-      {isConnected ? truncateAddress(walletAddress!) : 'Connect Wallet'}
+      {isConnecting ? (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+          <svg
+            style={{ animation: 'spin 1s linear infinite' }}
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+            <path d="M12 2a10 10 0 0 1 10 10" />
+          </svg>
+          Connecting...
+        </span>
+      ) : isConnected && walletAddress ? (
+        truncateAddress(walletAddress)
+      ) : (
+        'Connect Wallet'
+      )}
     </button>
   );
 }

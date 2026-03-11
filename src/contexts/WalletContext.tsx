@@ -60,14 +60,17 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Restore session — check if already connected via AppKit
     const existingAddress = appKit.getAddress();
     console.log('🔍 Checking existing connection:', existingAddress);
-    
+
     if (existingAddress && isWalletConnectConnected()) {
       console.log('✅ Restoring AppKit session:', existingAddress);
       setWalletAddress(existingAddress);
-      getSigner().then(setSigner).catch(console.error);
-      getProvider().then((prov) => {
-        if (prov) setProvider(new ethers.BrowserProvider(prov as any));
-      }).catch(console.error);
+      // Wait a bit for provider to be ready
+      setTimeout(() => {
+        getSigner().then(setSigner).catch(console.error);
+        getProvider().then((prov) => {
+          if (prov) setProvider(new ethers.BrowserProvider(prov as any));
+        }).catch(console.error);
+      }, 1000);
     }
 
     // Restore MetaMask extension session (desktop only)
@@ -92,27 +95,48 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.log('🔔 AppKit state changed:', connected, address);
       if (connected && address) {
         setWalletAddress(address);
-        try {
-          const s = await getSigner();
-          setSigner(s);
-          console.log('✅ Got signer:', s);
-        } catch (err) {
-          console.error('Could not get signer:', err);
-        }
-        try {
-          const prov = await getProvider();
-          if (prov) {
-            setProvider(new ethers.BrowserProvider(prov as any));
-            console.log('✅ Got provider');
+
+        // Wait longer for WalletConnect mobile app provider to initialize
+        setTimeout(async () => {
+          try {
+            const s = await getSigner();
+            setSigner(s);
+            console.log('✅ Got signer:', s);
+          } catch (err) {
+            console.error('Could not get signer:', err);
           }
-        } catch (err) {
-          console.error('Could not get provider:', err);
-        }
+          try {
+            const prov = await getProvider();
+            if (prov) {
+              setProvider(new ethers.BrowserProvider(prov as any));
+              console.log('✅ Got provider');
+            }
+          } catch (err) {
+            console.error('Could not get provider:', err);
+          }
+        }, 2000); // Wait 2 seconds for WalletConnect provider to be ready
       } else {
         console.log('🔴 Wallet disconnected');
         setWalletAddress(null);
         setSigner(null);
         setProvider(null);
+      }
+    });
+
+    // Subscribe to AppKit wallet provider changes (specifically for WalletConnect)
+    const unsubscribeWallet = appKit.subscribeWallet((state) => {
+      console.log('🔔 AppKit wallet state changed:', state);
+      if (state?.address && walletAddress === state.address) {
+        // Same address, check if provider is now available
+        if (!provider) {
+          console.log('🔄 Wallet provider updated, trying to get provider...');
+          getProvider().then((prov) => {
+            if (prov) {
+              setProvider(new ethers.BrowserProvider(prov as any));
+              console.log('✅ Got provider from wallet subscription');
+            }
+          }).catch(console.error);
+        }
       }
     });
 
@@ -133,6 +157,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
     return () => {
       unsubscribe();
+      unsubscribeWallet();
       window.ethereum?.removeListener('accountsChanged', handleAccountsChanged);
     };
   }, []);
@@ -148,17 +173,20 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       // Wait for connection and log the result
       let attempts = 0;
-      const maxAttempts = 40; // 20 seconds total (500ms * 40)
+      const maxAttempts = 60; // 30 seconds total (500ms * 60) - WalletConnect mobile app takes time
 
       while (attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
         const address = appKit.getAddress();
         const connected = appKit.getState().isConnected;
 
-        console.log(`🔍 Waiting for connection... (${attempts + 1}/${maxAttempts}) Address: ${address}, Connected: ${connected}`);
+        console.log(`🔍 Waiting for WalletConnect... (${attempts + 1}/${maxAttempts}) Address: ${address}, Connected: ${connected}`);
 
         if (address && connected) {
           console.log('✅ Wallet connected successfully:', address);
+          // Wait extra time for WalletConnect mobile app provider to initialize
+          console.log('⏳ Waiting for WalletConnect provider to initialize...');
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
           break;
         }
         attempts++;
@@ -171,6 +199,25 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         toast.error('Connection Timeout', {
           description: 'Please try connecting your wallet again',
         });
+      } else {
+        // Successfully connected - get signer and provider
+        console.log('🔄 Getting signer and provider...');
+        try {
+          const s = await getSigner();
+          setSigner(s);
+          console.log('✅ Got signer after connection:', s);
+        } catch (err) {
+          console.error('Could not get signer after connection:', err);
+        }
+        try {
+          const prov = await getProvider();
+          if (prov) {
+            setProvider(new ethers.BrowserProvider(prov as any));
+            console.log('✅ Got provider after connection');
+          }
+        } catch (err) {
+          console.error('Could not get provider after connection:', err);
+        }
       }
     } catch (error) {
       console.error('Failed to connect wallet:', error);

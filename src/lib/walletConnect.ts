@@ -41,39 +41,40 @@ export const appKit = createAppKit({
 export async function getProvider() {
   // Wait for AppKit to be ready
   let attempts = 0;
-  const maxAttempts = 30; // Increased to 30 for slower connections
+  const maxAttempts = 40; // Increased for WalletConnect mobile app
 
   while (attempts < maxAttempts) {
     try {
-      // Try getting provider from AppKit
+      // Try getting provider from AppKit - this works with WalletConnect
       const provider = await appKit.getProvider();
       if (provider) {
-        console.log('✅ Got provider from AppKit');
+        console.log('✅ Got provider from AppKit (attempt ' + attempts + ')');
         return provider;
       }
     } catch (err) {
-      console.warn('⚠️ getProvider() attempt failed:', err);
+      console.warn('⚠️ getProvider() attempt ' + attempts + ' failed:', err);
     }
 
-    // Check if connected before waiting
+    // Check connection state
     const state = appKit.getState();
     if (state.isConnected && state.address) {
-      console.log('🔍 AppKit connected, waiting for provider...', state.address);
+      console.log('🔍 WalletConnect connected:', state.address, '- waiting for provider...');
     }
 
     attempts++;
-    if (attempts <= 10 || attempts % 5 === 0) {
-      console.log(`⏳ Waiting for provider... (${attempts}/${maxAttempts})`);
+    if (attempts <= 15 || attempts % 10 === 0) {
+      console.log(`⏳ Waiting for WalletConnect provider... (${attempts}/${maxAttempts})`);
     }
-    await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
-  // Final attempt - get provider directly from AppKit state
+  // Final check - get full AppKit state
   const state = appKit.getState();
-  console.log('🔍 AppKit state:', state);
+  console.log('🔍 Final AppKit state:', state);
 
-  // If connected but no provider, try one more time with explicit chainId
-  if (state.isConnected) {
+  // For WalletConnect mobile app, try to get provider from wallet info
+  if (state.isConnected && state.address) {
+    // Try getting provider one more time
     try {
       const provider = await appKit.getProvider();
       if (provider) {
@@ -83,16 +84,30 @@ export async function getProvider() {
     } catch (err) {
       console.warn('⚠️ Final getProvider() attempt failed:', err);
     }
+
+    // Check wallet provider from AppKit's internal state
+    const walletInfo = (state as any).walletInfo;
+    if (walletInfo?.provider) {
+      console.log('✅ Got provider from walletInfo');
+      return walletInfo.provider;
+    }
   }
 
   throw new Error('Provider not available from AppKit after multiple attempts. Please try reconnecting.');
 }
 
 export async function getSigner() {
-  const provider = await getProvider();
-  if (!provider) throw new Error('Provider not available');
-  const browserProvider = new ethers.BrowserProvider(provider as any);
-  return await browserProvider.getSigner();
+  try {
+    const provider = await getProvider();
+    if (!provider) throw new Error('Provider not available');
+    const browserProvider = new ethers.BrowserProvider(provider as any);
+    const signer = await browserProvider.getSigner();
+    console.log('✅ Got signer from provider');
+    return signer;
+  } catch (err) {
+    console.error('❌ Could not get signer:', err);
+    throw err;
+  }
 }
 
 export async function getConnectedAddress() {

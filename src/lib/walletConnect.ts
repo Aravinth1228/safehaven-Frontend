@@ -41,24 +41,50 @@ export const appKit = createAppKit({
 export async function getProvider() {
   // Wait for AppKit to be ready
   let attempts = 0;
-  const maxAttempts = 20; // Increased from 10 to 20
+  const maxAttempts = 30; // Increased to 30 for slower connections
 
   while (attempts < maxAttempts) {
-    const provider = await appKit.getProvider();
-    if (provider) {
-      console.log('✅ Got provider from AppKit');
-      return provider;
+    try {
+      // Try getting provider from AppKit
+      const provider = await appKit.getProvider();
+      if (provider) {
+        console.log('✅ Got provider from AppKit');
+        return provider;
+      }
+    } catch (err) {
+      console.warn('⚠️ getProvider() attempt failed:', err);
+    }
+
+    // Check if connected before waiting
+    const state = appKit.getState();
+    if (state.isConnected && state.address) {
+      console.log('🔍 AppKit connected, waiting for provider...', state.address);
     }
 
     attempts++;
-    console.log(`⏳ Waiting for provider... (${attempts}/${maxAttempts})`);
+    if (attempts <= 10 || attempts % 5 === 0) {
+      console.log(`⏳ Waiting for provider... (${attempts}/${maxAttempts})`);
+    }
     await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
   }
 
   // Final attempt - get provider directly from AppKit state
   const state = appKit.getState();
   console.log('🔍 AppKit state:', state);
-  
+
+  // If connected but no provider, try one more time with explicit chainId
+  if (state.isConnected) {
+    try {
+      const provider = await appKit.getProvider();
+      if (provider) {
+        console.log('✅ Got provider on final attempt');
+        return provider;
+      }
+    } catch (err) {
+      console.warn('⚠️ Final getProvider() attempt failed:', err);
+    }
+  }
+
   throw new Error('Provider not available from AppKit after multiple attempts. Please try reconnecting.');
 }
 

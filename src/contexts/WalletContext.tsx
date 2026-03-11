@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ethers } from 'ethers';
+import { toast } from 'sonner';
 import {
   getSigner,
   getProvider,
@@ -148,37 +149,33 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Wait for connection and log the result
       let attempts = 0;
       const maxAttempts = 40; // 20 seconds total (500ms * 40)
-      
+
       while (attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
         const address = appKit.getAddress();
         const connected = appKit.getState().isConnected;
-        
+
         console.log(`🔍 Waiting for connection... (${attempts + 1}/${maxAttempts}) Address: ${address}, Connected: ${connected}`);
-        
+
         if (address && connected) {
           console.log('✅ Wallet connected successfully:', address);
           break;
         }
         attempts++;
       }
-      
+
       // Final check
       const finalAddress = appKit.getAddress();
       if (!finalAddress) {
         console.warn('⚠️ Wallet connection attempt timed out');
-        toast({
-          title: 'Connection Timeout',
+        toast.error('Connection Timeout', {
           description: 'Please try connecting your wallet again',
-          variant: 'destructive',
         });
       }
     } catch (error) {
       console.error('Failed to connect wallet:', error);
-      toast({
-        title: 'Connection Failed',
+      toast.error('Connection Failed', {
         description: error instanceof Error ? error.message : 'Failed to connect wallet',
-        variant: 'destructive',
       });
       throw error;
     } finally {

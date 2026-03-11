@@ -78,7 +78,7 @@ export function closeModal() {
 }
 
 /**
- * Sign typed data using AppKit (works on mobile!)
+ * Sign typed data using AppKit provider (works on mobile!)
  * This is the KEY function for mobile signature support
  */
 export async function signTypedData(
@@ -86,13 +86,35 @@ export async function signTypedData(
   types: Record<string, Array<ethers.TypedDataField>>,
   value: Record<string, any>
 ): Promise<string> {
-  // Use AppKit's built-in signTypedData - this triggers MetaMask on mobile!
-  return await appKit.signTypedData({
-    domain,
-    types,
-    primaryType: Object.keys(types)[0],
-    message: value
+  // Get provider from AppKit
+  const provider = await getProvider();
+  
+  if (!provider) {
+    throw new Error('No provider available from AppKit');
+  }
+  
+  // Get user address
+  const address = await getConnectedAddress();
+  
+  if (!address) {
+    throw new Error('No address connected');
+  }
+  
+  // Use ethers to hash the typed data
+  const hashedTypedData = ethers.TypedDataEncoder.hash(domain, types, value);
+  
+  // Request signature from provider (this triggers MetaMask on mobile!)
+  const signature = await provider.request({
+    method: 'eth_signTypedData_v4',
+    params: [address, JSON.stringify({
+      domain,
+      types,
+      primaryType: Object.keys(types)[0],
+      message: value
+    })]
   });
+  
+  return signature as string;
 }
 
 export {

@@ -12,7 +12,6 @@ export function isMetaMaskInstalled(): boolean {
 
 export function generateMetaMaskLink(dappUrl?: string): string {
   const url = dappUrl || window.location.href;
-  // Remove protocol prefix for metamask deep link
   const cleanUrl = url.replace(/^https?:\/\//, '');
   return `https://metamask.app.link/dapp/${cleanUrl}`;
 }

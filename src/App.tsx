@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { WalletProvider } from "@/contexts/WalletContext";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { appKit } from "@/lib/walletConnect";
 import Navbar from "@/components/Navbar";
 import Index from "./pages/Index";
 import SignUp from "./pages/SignUp";
@@ -25,8 +24,6 @@ const App = () => (
     <WalletProvider>
       <AuthProvider>
         <TooltipProvider>
-          {/* WalletConnect Modal */}
-          <appKit />
           <Toaster />
           <Sonner />
           <BrowserRouter>

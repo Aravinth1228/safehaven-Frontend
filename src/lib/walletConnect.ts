@@ -3,10 +3,12 @@ import { EthersAdapter } from '@reown/appkit-adapter-ethers';
 import { sepolia, mainnet } from '@reown/appkit/networks';
 import { ethers } from 'ethers';
 
-const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '8e28c9e8e8e8e8e8e8e8e8e8e8e8e8e8';
+// Get project ID from https://cloud.reown.com
+const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID_HERE';
 
 const networks = [sepolia, mainnet];
 
+// Initialize AppKit
 export const appKit = createAppKit({
   adapters: [new EthersAdapter()],
   networks,
@@ -15,11 +17,13 @@ export const appKit = createAppKit({
     name: 'SafeHaven',
     description: 'Emergency Response System with Blockchain',
     url: 'https://safehaven-eta.vercel.app',
-    icons: ['https://avatars.githubusercontent.com/u/3778488']
+    icons: ['https://avatars.githubusercontent.com/u/3778488'],
   },
   themeMode: 'light',
   themeVariables: {
-    '--w3m-accent': '#3b82f6',
+    '--w3m-accent': '#FF0066',
+    '--w3m-border-radius-master': '12px',
+    '--w3m-font-size-master': '14px',
   },
   features: {
     email: false,
@@ -54,7 +58,9 @@ export function isConnected(): boolean {
   return appKit.getState().isConnected;
 }
 
-export function onConnectionChange(callback: (connected: boolean, address?: string) => void) {
+export function onConnectionChange(
+  callback: (connected: boolean, address?: string) => void
+) {
   return appKit.subscribeAccount((state) => {
     callback(state.isConnected, state.address);
   });
@@ -78,5 +84,5 @@ export {
   openMetaMask,
   connectMetaMask,
   generateMetaMaskLink,
-  getConnectionMethod
+  getConnectionMethod,
 } from './metamaskMobile';

@@ -4,11 +4,14 @@ import { toast } from 'sonner';
 import {
   getSigner,
   getProvider,
+  getConnectedAddress,
   isConnected as isWalletConnectConnected,
   onConnectionChange,
   disconnect as walletConnectDisconnect,
   openModal,
   appKit,
+  cachedProvider,
+  isProviderReady,
 } from '../lib/walletConnect';
 import {
   isMobile as checkIsMobile,
@@ -57,20 +60,20 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     // Check MetaMask installed
     setIsMetaMaskInstalled(checkIsMetaMaskInstalled());
 
-    // Restore session — check if already connected via AppKit
+    // Check if already connected via AppKit (using cached values)
     const existingAddress = appKit.getAddress();
-    console.log('🔍 Checking existing connection:', existingAddress);
+    console.log('🔍 Checking existing connection:', existingAddress, 'Provider ready:', isProviderReady);
 
-    if (existingAddress && isWalletConnectConnected()) {
-      console.log('✅ Restoring AppKit session:', existingAddress);
+    if (existingAddress && isProviderReady && cachedProvider) {
+      console.log('✅ Restoring AppKit session with cached provider:', existingAddress);
       setWalletAddress(existingAddress);
-      // Wait a bit for provider to be ready
-      setTimeout(() => {
-        getSigner().then(setSigner).catch(console.error);
-        getProvider().then((prov) => {
-          if (prov) setProvider(new ethers.BrowserProvider(prov as any));
-        }).catch(console.error);
-      }, 1000);
+      try {
+        const browserProvider = new ethers.BrowserProvider(cachedProvider);
+        browserProvider.getSigner().then(setSigner).catch(console.error);
+        setProvider(browserProvider);
+      } catch (err) {
+        console.error('Could not restore signer:', err);
+      }
     }
 
     // Restore MetaMask extension session (desktop only)
@@ -90,31 +93,41 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         .catch(console.error);
     }
 
-    // Subscribe to AppKit connection changes (handles mobile + WalletConnect)
+    // Subscribe to AppKit connection changes
     const unsubscribe = onConnectionChange(async (connected, address) => {
       console.log('🔔 AppKit state changed:', connected, address);
       if (connected && address) {
         setWalletAddress(address);
-
-        // Wait longer for WalletConnect mobile app provider to initialize
+        
+        // Wait for provider to be cached by the global subscription
         setTimeout(async () => {
-          try {
-            const s = await getSigner();
-            setSigner(s);
-            console.log('✅ Got signer:', s);
-          } catch (err) {
-            console.error('Could not get signer:', err);
-          }
-          try {
-            const prov = await getProvider();
-            if (prov) {
-              setProvider(new ethers.BrowserProvider(prov as any));
-              console.log('✅ Got provider');
+          if (isProviderReady && cachedProvider) {
+            try {
+              const browserProvider = new ethers.BrowserProvider(cachedProvider);
+              const signer = await browserProvider.getSigner();
+              setSigner(signer);
+              setProvider(browserProvider);
+              console.log('✅ Got signer and provider from cache');
+            } catch (err) {
+              console.error('Could not get signer from cached provider:', err);
             }
-          } catch (err) {
-            console.error('Could not get provider:', err);
+          } else {
+            console.warn('⚠️ Provider not ready after connection, waiting...');
+            // Wait a bit more and try again
+            setTimeout(async () => {
+              if (isProviderReady && cachedProvider) {
+                try {
+                  const browserProvider = new ethers.BrowserProvider(cachedProvider);
+                  const signer = await browserProvider.getSigner();
+                  setSigner(signer);
+                  setProvider(browserProvider);
+                } catch (err) {
+                  console.error('Could not get signer:', err);
+                }
+              }
+            }, 2000);
           }
-        }, 2000); // Wait 2 seconds for WalletConnect provider to be ready
+        }, 1500); // Wait 1.5s for provider caching
       } else {
         console.log('🔴 Wallet disconnected');
         setWalletAddress(null);
@@ -147,39 +160,28 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const connectWallet = async () => {
     setIsConnecting(true);
     try {
-      console.log('🔗 Connecting wallet... Mobile:', checkIsMobile(), 'MetaMask:', checkIsMetaMaskInstalled());
+      console.log('🔗 Connecting wallet...');
 
-      // Use AppKit for ALL connections (mobile + desktop)
+      // Open AppKit modal - connection is handled by AppKit
       console.log('📍 Opening AppKit modal...');
       openModal();
 
-      // Wait for connection - check for ADDRESS instead of isConnected flag
+      // Wait for connection (address appears)
       let attempts = 0;
-      const maxAttempts = 60; // 30 seconds total
+      const maxAttempts = 60; // 30 seconds
 
       while (attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
         const address = appKit.getAddress();
-        const state = appKit.getState();
-        
-        // Log less frequently to reduce noise
+
         if (attempts < 10 || attempts % 10 === 0) {
-          console.log(`🔍 Waiting for WalletConnect... (${attempts + 1}/${maxAttempts}) Address: ${address}`);
-          if (address) {
-            console.log('🔍 AppKit state:', {
-              isConnected: state.isConnected,
-              loading: state.loading,
-              address: state.address
-            });
-          }
+          console.log(`🔍 Waiting for connection... (${attempts + 1}/${maxAttempts}) Address: ${address}`);
         }
 
-        // Check for ADDRESS instead of isConnected (AppKit bug on mobile)
         if (address) {
-          console.log('✅ Wallet connected successfully:', address);
-          // Wait extra time for WalletConnect mobile app provider to initialize
-          console.log('⏳ Waiting for WalletConnect provider to initialize...');
-          await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+          console.log('✅ Wallet connected:', address);
+          // Wait for provider to be cached
+          await new Promise(resolve => setTimeout(resolve, 2000));
           break;
         }
         attempts++;
@@ -188,28 +190,38 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       // Final check
       const finalAddress = appKit.getAddress();
       if (!finalAddress) {
-        console.warn('⚠️ Wallet connection attempt timed out');
+        console.warn('⚠️ Connection timed out');
         toast.error('Connection Timeout', {
           description: 'Please try connecting your wallet again',
         });
       } else {
-        // Successfully connected - get signer and provider
-        console.log('🔄 Getting signer and provider...');
-        try {
-          const s = await getSigner();
-          setSigner(s);
-          console.log('✅ Got signer after connection:', s);
-        } catch (err) {
-          console.error('Could not get signer after connection:', err);
-        }
-        try {
-          const prov = await getProvider();
-          if (prov) {
-            setProvider(new ethers.BrowserProvider(prov as any));
-            console.log('✅ Got provider after connection');
+        // Check if provider was cached
+        if (isProviderReady && cachedProvider) {
+          console.log('✅ Provider ready from cache');
+          try {
+            const browserProvider = new ethers.BrowserProvider(cachedProvider);
+            const signer = await browserProvider.getSigner();
+            setSigner(signer);
+            setProvider(browserProvider);
+            console.log('✅ Got signer and provider');
+          } catch (err) {
+            console.error('Could not get signer:', err);
           }
-        } catch (err) {
-          console.error('Could not get provider after connection:', err);
+        } else {
+          console.warn('⚠️ Provider not ready yet, waiting...');
+          // Wait a bit more for provider caching
+          setTimeout(async () => {
+            if (isProviderReady && cachedProvider) {
+              try {
+                const browserProvider = new ethers.BrowserProvider(cachedProvider);
+                const signer = await browserProvider.getSigner();
+                setSigner(signer);
+                setProvider(browserProvider);
+              } catch (err) {
+                console.error('Could not get signer:', err);
+              }
+            }
+          }, 2000);
         }
       }
     } catch (error) {

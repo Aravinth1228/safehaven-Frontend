@@ -3,12 +3,16 @@ import { EthersAdapter } from '@reown/appkit-adapter-ethers';
 import { sepolia, mainnet } from '@reown/appkit/networks';
 import { ethers } from 'ethers';
 
-// Get project ID from https://cloud.reown.com
-const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID_HERE';
+// Validate Project ID
+if (!import.meta.env.VITE_WALLETCONNECT_PROJECT_ID) {
+  throw new Error('WalletConnect Project ID missing - check .env file');
+}
+
+const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID;
 
 const networks = [sepolia, mainnet];
 
-// Initialize AppKit with mobile support
+// Initialize AppKit
 export const appKit = createAppKit({
   adapters: [new EthersAdapter()],
   networks,
@@ -38,108 +42,94 @@ export const appKit = createAppKit({
   defaultNetwork: sepolia,
 });
 
-export async function getProvider() {
-  console.log('🔍 Starting getProvider()...');
+// ✅ CACHED PROVIDER - State-driven architecture
+let cachedProvider: any = null;
+let cachedAddress: string | null = null;
+let isProviderReady = false;
+
+// Export for use in WalletContext
+export { cachedProvider, cachedAddress, isProviderReady };
+
+// Subscribe to AppKit account changes and cache provider
+appKit.subscribeAccount(async (state) => {
+  console.log('🔔 AppKit account state changed:', state);
   
-  // Wait for AppKit to be ready
-  let attempts = 0;
-  const maxAttempts = 60; // 30 seconds total (500ms * 60)
-
-  while (attempts < maxAttempts) {
-    try {
-      // Try getting provider from AppKit
-      const provider = await appKit.getProvider();
-      if (provider) {
-        console.log('✅ Got provider from AppKit (attempt ' + attempts + ')');
-        return provider;
-      }
-    } catch (err) {
-      console.warn('⚠️ getProvider() attempt ' + attempts + ' failed:', err);
-    }
-
-    // Check connection state
-    const address = appKit.getAddress();
-    const state = appKit.getState();
+  if (state.isConnected && state.address) {
+    cachedAddress = state.address;
     
-    if (address) {
-      console.log('🔍 WalletConnect connected:', address, '- waiting for provider... (attempt ' + attempts + ')');
-      console.log('🔍 AppKit state:', {
-        isConnected: state.isConnected,
-        loading: state.loading,
-        open: state.open,
-        address: state.address
-      });
-    }
-
-    attempts++;
-    if (attempts <= 20 || attempts % 10 === 0) {
-      console.log(`⏳ Waiting for WalletConnect provider... (${attempts}/${maxAttempts}) Address: ${address || 'none'}`);
-    }
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
-
-  // Final check - get full AppKit state
-  const address = appKit.getAddress();
-  const state = appKit.getState();
-  console.log('🔍 Final AppKit state:', state, 'Address:', address);
-
-  // If we have an address but no provider from AppKit, try fallbacks
-  if (address) {
-    // Try 1: Get provider one more time
-    try {
-      const provider = await appKit.getProvider();
-      if (provider) {
-        console.log('✅ Got provider on final attempt');
-        return provider;
-      }
-    } catch (err) {
-      console.warn('⚠️ Final getProvider() attempt failed:', err);
-    }
-
-    // Try 2: Check walletInfo from AppKit's internal state
-    const walletInfo = (state as any).walletInfo;
-    if (walletInfo?.provider) {
-      console.log('✅ Got provider from walletInfo');
-      return walletInfo.provider;
-    }
-
-    // Try 3: Check connectors for WalletConnect provider
-    const connectors = (state as any).connectors;
-    if (connectors && Array.isArray(connectors)) {
-      for (const connector of connectors) {
-        if (connector?.provider) {
-          console.log('✅ Got provider from connector');
-          return connector.provider;
+    // Wait a moment for AppKit to fully initialize the provider
+    setTimeout(async () => {
+      try {
+        const provider = await appKit.getProvider();
+        if (provider) {
+          cachedProvider = provider;
+          isProviderReady = true;
+          console.log('✅ Provider cached successfully:', state.address);
+        } else {
+          console.warn('⚠️ Provider is null after connection');
+          isProviderReady = false;
         }
+      } catch (err) {
+        console.error('❌ Failed to cache provider:', err);
+        isProviderReady = false;
       }
-    }
+    }, 1000); // Wait 1 second for provider initialization
+  } else {
+    // Disconnected - clear cache
+    cachedProvider = null;
+    cachedAddress = null;
+    isProviderReady = false;
+    console.log('🔴 Provider cache cleared (disconnected)');
   }
+});
 
-  throw new Error('Provider not available from AppKit after multiple attempts. Please try reconnecting.');
+// Also subscribe to wallet events for additional reliability
+appKit.subscribeWallet((state) => {
+  console.log('🔔 AppKit wallet state changed:', state);
+  if (state?.address) {
+    cachedAddress = state.address;
+  }
+});
+
+/**
+ * Get Provider - NO POLLING, state-driven
+ */
+export async function getProvider() {
+  if (!cachedProvider || !isProviderReady) {
+    console.warn('⚠️ Provider not ready. Cached:', !!cachedProvider, 'Ready:', isProviderReady);
+    throw new Error('Wallet not connected yet. Please connect wallet first.');
+  }
+  
+  console.log('✅ Returning cached provider');
+  return cachedProvider;
 }
 
+/**
+ * Get Signer
+ */
 export async function getSigner() {
-  try {
-    const provider = await getProvider();
-    if (!provider) throw new Error('Provider not available');
-    const browserProvider = new ethers.BrowserProvider(provider as any);
-    const signer = await browserProvider.getSigner();
-    console.log('✅ Got signer from provider');
-    return signer;
-  } catch (err) {
-    console.error('❌ Could not get signer:', err);
-    throw err;
-  }
+  const provider = await getProvider();
+  const browserProvider = new ethers.BrowserProvider(provider);
+  return await browserProvider.getSigner();
 }
 
+/**
+ * Get Connected Address
+ */
 export async function getConnectedAddress() {
-  return appKit.getAddress();
+  return cachedAddress || appKit.getAddress();
 }
 
+/**
+ * Check if connected
+ */
 export function isConnected(): boolean {
-  return appKit.getState().isConnected;
+  return isProviderReady && cachedAddress !== null;
 }
 
+/**
+ * Subscribe to connection changes
+ */
 export function onConnectionChange(
   callback: (connected: boolean, address?: string) => void
 ) {
@@ -148,56 +138,44 @@ export function onConnectionChange(
   });
 }
 
+/**
+ * Disconnect
+ */
 export async function disconnect() {
   await appKit.disconnect();
 }
 
+/**
+ * Open modal
+ */
 export function openModal() {
   appKit.open();
 }
 
+/**
+ * Close modal
+ */
 export function closeModal() {
   appKit.close();
 }
 
 /**
- * Sign typed data using AppKit provider (works on mobile!)
- * This is the KEY function for mobile signature support
+ * Sign typed data
  */
 export async function signTypedData(
   domain: ethers.TypedDataDomain,
   types: Record<string, Array<ethers.TypedDataField>>,
   value: Record<string, any>
 ): Promise<string> {
-  // Try to get provider from AppKit first
-  let provider: any = null;
-  
-  try {
-    provider = await appKit.getProvider();
-  } catch (err) {
-    console.warn('⚠️ Could not get provider from AppKit, using window.ethereum fallback');
-  }
-
-  // If AppKit provider not available, use window.ethereum (MetaMask mobile browser)
-  if (!provider && window.ethereum) {
-    provider = window.ethereum;
-  }
-
-  if (!provider) {
-    throw new Error('No provider available. Please connect wallet first.');
-  }
-
-  // Get user address
-  const address = appKit.getAddress() || await getConnectedAddress();
+  const provider = await getProvider();
+  const address = cachedAddress || await getConnectedAddress();
 
   if (!address) {
     throw new Error('No address connected');
   }
 
-  // Use ethers to hash the typed data
   const hashedTypedData = ethers.TypedDataEncoder.hash(domain, types, value);
 
-  // Request signature from provider (this triggers MetaMask on mobile!)
   const signature = await provider.request({
     method: 'eth_signTypedData_v4',
     params: [address, JSON.stringify({

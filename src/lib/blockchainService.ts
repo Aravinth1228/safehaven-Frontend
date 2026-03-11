@@ -138,30 +138,60 @@ export class BlockchainService {
     // If signer already set (from WalletContext), use it
     if (this.signer) {
       console.log('✅ Using existing signer from WalletContext');
+      console.log('🔐 Signer address:', await this.signer.getAddress());
       return;
     }
 
-    console.log('🔐 No signer available, waiting for WalletContext/AppKit...');
+    console.log('🔐 No signer available, checking connection...');
 
-    // Wait for signer from WalletContext (AppKit handles the connection)
-    // Give more time for the wallet connection to complete
-    const maxWaitAttempts = 30; // 15 seconds total
+    // Check if AppKit is connected
+    try {
+      const { isConnected: appKitIsConnected, getConnectedAddress } = await import('./walletConnect');
+      const connected = appKitIsConnected();
+      const address = await getConnectedAddress();
+      
+      console.log('🔍 AppKit connected:', connected, 'Address:', address);
+      
+      if (connected && address) {
+        // Get signer from AppKit
+        const { getSigner: getAppKitSigner } = await import('./walletConnect');
+        const appkitSigner = await getAppKitSigner();
+        
+        if (appkitSigner) {
+          this.signer = appkitSigner;
+          console.log('✅ Got signer from AppKit:', address);
+          
+          // Refresh chainId
+          if (appkitSigner.provider) {
+            const network = await appkitSigner.provider.getNetwork();
+            this.chainId = Number(network.chainId);
+            console.log('🔐 AppKit chainId:', this.chainId);
+          }
+          return;
+        }
+      }
+    } catch (err: any) {
+      console.warn('⚠️ AppKit check failed:', err.message);
+    }
+
+    // If not connected via AppKit, wait for WalletContext
+    console.log('⏳ Waiting for signer from WalletContext...');
+    const maxWaitAttempts = 30;
+    
     for (let i = 0; i < maxWaitAttempts; i++) {
       if (this.signer) {
         console.log('✅ Signer became available from WalletContext');
         return;
       }
-      console.log(`⏳ Waiting for signer from WalletContext... (${i + 1}/${maxWaitAttempts})`);
+      console.log(`⏳ Waiting... (${i + 1}/${maxWaitAttempts})`);
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    // If still no signer, try to get directly from AppKit
-    console.log('🔐 Signer not available from WalletContext, trying AppKit directly...');
+    // Final attempt - get directly from AppKit
+    console.log('🔐 Final attempt - getting signer from AppKit...');
     try {
-      const { getSigner: getAppKitSigner, getConnectedAddress } = await import('./walletConnect');
-
-      // First check if connected
-      const { isConnected: appKitIsConnected } = await import('./walletConnect');
+      const { getSigner: getAppKitSigner, getConnectedAddress, isConnected: appKitIsConnected } = await import('./walletConnect');
+      
       if (!appKitIsConnected()) {
         throw new Error('AppKit not connected. Please connect wallet first.');
       }
@@ -171,42 +201,18 @@ export class BlockchainService {
 
       if (appkitSigner && address) {
         this.signer = appkitSigner;
-        console.log('✅ Got signer from AppKit:', address);
-
-        // Refresh chainId
+        console.log('✅ Got signer from AppKit (final attempt):', address);
+        
         if (appkitSigner.provider) {
-          try {
-            const network = await appkitSigner.provider.getNetwork();
-            this.chainId = Number(network.chainId);
-            console.log('🔐 AppKit chainId:', this.chainId);
-          } catch (networkErr) {
-            console.warn('⚠️ Could not get network:', networkErr);
-          }
+          const network = await appkitSigner.provider.getNetwork();
+          this.chainId = Number(network.chainId);
         }
         return;
-      } else {
-        throw new Error('AppKit returned null signer or address');
       }
     } catch (err: any) {
-      console.warn('⚠️ Could not get signer from AppKit:', err.message);
-      // Don't throw yet, try fallback
+      console.error('❌ Failed to get signer:', err.message);
+      throw new Error(`Wallet not connected. Please connect your MetaMask wallet and try again.`);
     }
-
-    // Fallback to window.ethereum (desktop)
-    if (!this.provider && window.ethereum) {
-      this.provider = new ethers.BrowserProvider(window.ethereum);
-    }
-
-    if (!this.provider) {
-      throw new Error('Provider not initialized and no signer available. Please connect wallet first.');
-    }
-
-    console.log('🔐 Creating signer from window.ethereum...');
-    await window.ethereum.request({
-      method: 'eth_requestAccounts'
-    });
-    this.signer = await this.provider.getSigner();
-    console.log('✅ Signer created from window.ethereum');
   }
 
   /**
@@ -338,17 +344,36 @@ export class BlockchainService {
     console.log('ForwardRequest:', { ...message, data: message.data?.substring(0, 20) + '...' });
 
     let signature: string;
-    
+
     // Use the signer's provider directly - works for both mobile and desktop
     // The signer from WalletContext already has the correct provider
     console.log('🔐 Using signer from WalletContext for signing');
-    
-    // Sign using ethers signer (works with AppKit provider)
-    signature = await this.signer!.signTypedData(
-      domain,
-      { ForwardRequest: FORWARD_REQUEST_TYPE },
-      message
-    );
+
+    try {
+      // Try using ethers signer first (works on desktop)
+      signature = await this.signer!.signTypedData(
+        domain,
+        { ForwardRequest: FORWARD_REQUEST_TYPE },
+        message
+      );
+      console.log('✅ Signature created using ethers signer');
+    } catch (ethersError: any) {
+      console.warn('⚠️ Ethers signTypedData failed, trying AppKit method:', ethersError.message);
+      
+      // Fallback: Use AppKit's signTypedData function (works on mobile!)
+      try {
+        const { signTypedData: appKitSignTypedData } = await import('./walletConnect');
+        signature = await appKitSignTypedData(
+          domain,
+          { ForwardRequest: FORWARD_REQUEST_TYPE },
+          message
+        );
+        console.log('✅ Signature created using AppKit signTypedData (mobile method)');
+      } catch (appKitError: any) {
+        console.error('❌ Both signing methods failed');
+        throw new Error(`Failed to sign: ${appKitError.message}. Please try again.`);
+      }
+    }
 
     console.log('✅ Signature created:', signature);
     return { signature, message };

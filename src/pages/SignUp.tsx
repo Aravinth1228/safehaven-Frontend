@@ -187,6 +187,12 @@ const SignUp: React.FC = () => {
       console.log('🚀 Starting registration...');
       console.log('Wallet:', walletAddress);
 
+      // CRITICAL: Verify wallet is still connected before proceeding
+      const { isConnected: checkConnection } = await import('../lib/walletConnect');
+      if (!checkConnection()) {
+        throw new Error('Wallet disconnected. Please reconnect and try again.');
+      }
+
       // Step 1: Check if already registered on blockchain
       toast({
         title: 'Checking Registration',
@@ -212,6 +218,7 @@ const SignUp: React.FC = () => {
       toast({
         title: 'Sign Registration',
         description: 'Please sign the message in MetaMask to register on blockchain',
+        duration: 30000, // 30 seconds for user to sign
       });
 
       const dateOfBirth = new Date(formData.dob);

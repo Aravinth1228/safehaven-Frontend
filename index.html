@@ -23,6 +23,21 @@
     <meta name="twitter:title" content="SafeHaven" />
     <meta name="twitter:description" content="Emergency Response System with Blockchain" />
     <meta name="twitter:image" content="/logo.png" />
+
+    <!-- vConsole for mobile debugging -->
+    <script src="https://cdn.jsdelivr.net/npm/vconsole@latest/dist/vconsole.min.js"></script>
+    <script>
+      // Initialize vConsole on mobile devices only
+      if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+        window.vConsole = new window.VConsole({
+          defaultPlugins: ['system', 'network', 'element', 'storage'],
+          maxLogNumber: 1000,
+          onReady: () => {
+            console.log('🔧 vConsole initialized');
+          }
+        });
+      }
+    </script>
   </head>
 
   <body>

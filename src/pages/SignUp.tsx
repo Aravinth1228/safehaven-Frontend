@@ -187,10 +187,36 @@ const SignUp: React.FC = () => {
       console.log('🚀 Starting registration...');
       console.log('Wallet:', walletAddress);
 
-      // CRITICAL: Verify wallet is still connected before proceeding
-      const { isConnected: checkConnection } = await import('../lib/walletConnect');
-      if (!checkConnection()) {
+      // CRITICAL: Re-check wallet connection and refresh signer
+      // This fixes the issue where wallet appears connected but signer is lost
+      const { isConnected: checkConnection, getSigner, getConnectedAddress } = await import('../lib/walletConnect');
+      
+      const stillConnected = checkConnection();
+      const currentAddress = await getConnectedAddress();
+      
+      console.log('🔍 Connection check:', {
+        connected: stillConnected,
+        currentAddress,
+        contextAddress: walletAddress
+      });
+
+      if (!stillConnected || !currentAddress) {
         throw new Error('Wallet disconnected. Please reconnect and try again.');
+      }
+
+      // Verify addresses match
+      if (currentAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+        console.warn('⚠️ Address mismatch! Current:', currentAddress, 'Expected:', walletAddress);
+        throw new Error('Wallet address changed. Please reconnect.');
+      }
+
+      // Try to get fresh signer
+      try {
+        const freshSigner = await getSigner();
+        console.log('✅ Got fresh signer:', await freshSigner.getAddress());
+      } catch (signerErr: any) {
+        console.error('❌ Failed to get signer:', signerErr.message);
+        throw new Error('Failed to access wallet. Please reconnect and try again.');
       }
 
       // Step 1: Check if already registered on blockchain
@@ -416,12 +442,37 @@ const SignUp: React.FC = () => {
             </p>
 
             {/* Connected Wallet */}
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 border border-primary/30 mb-6">
-              <CheckCircle className="w-5 h-5 text-primary" />
-              <div>
-                <p className="text-xs text-muted-foreground">Connected Wallet</p>
-                <p className="font-mono text-sm">{walletAddress?.slice(0, 10)}...{walletAddress?.slice(-8)}</p>
+            <div className="flex items-center justify-between gap-3 p-4 rounded-xl bg-primary/10 border border-primary/30 mb-6">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-primary" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Connected Wallet</p>
+                  <p className="font-mono text-sm">{walletAddress?.slice(0, 10)}...{walletAddress?.slice(-8)}</p>
+                </div>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  console.log('🔄 Reconnecting wallet...');
+                  try {
+                    await connectWallet();
+                    toast({
+                      title: 'Wallet Reconnected',
+                      description: 'Wallet connection refreshed successfully',
+                    });
+                  } catch (err: any) {
+                    toast({
+                      title: 'Reconnect Failed',
+                      description: err.message || 'Failed to reconnect wallet',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+                className="text-xs h-8"
+              >
+                Reconnect
+              </Button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">

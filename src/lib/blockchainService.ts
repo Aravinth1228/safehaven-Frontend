@@ -131,30 +131,58 @@ export class BlockchainService {
 
   /**
    * Ensure signer exists - CRITICAL for reliable signing
-   * Works with both window.ethereum and WalletContext
+   * Works with both window.ethereum and WalletContext/AppKit
+   * PUBLIC METHOD - can be called from useBlockchain
    */
-  private async ensureSigner(): Promise<void> {
+  async ensureSigner(): Promise<void> {
     // If signer already set (from WalletContext), use it
     if (this.signer) {
+      console.log('✅ Using existing signer from WalletContext');
       return;
     }
 
-    // Try to create from provider
+    console.log('🔐 No signer available, trying to get from AppKit...');
+
+    // Try to get signer from AppKit (for mobile)
+    try {
+      const { getSigner: getAppKitSigner } = await import('./walletConnect');
+      const appkitSigner = await getAppKitSigner();
+      
+      if (appkitSigner) {
+        this.signer = appkitSigner;
+        console.log('✅ Got signer from AppKit');
+        
+        // Refresh chainId
+        if (appkitSigner.provider) {
+          try {
+            const network = await appkitSigner.provider.getNetwork();
+            this.chainId = Number(network.chainId);
+            console.log('🔐 AppKit chainId:', this.chainId);
+          } catch (networkErr) {
+            console.warn('⚠️ Could not get network:', networkErr);
+          }
+        }
+        return;
+      }
+    } catch (err) {
+      console.warn('⚠️ Could not get signer from AppKit:', err);
+    }
+
+    // Fallback to window.ethereum (desktop)
+    if (!this.provider && window.ethereum) {
+      this.provider = new ethers.BrowserProvider(window.ethereum);
+    }
+
     if (!this.provider) {
       throw new Error('Provider not initialized and no signer available. Please connect wallet first.');
     }
 
-    console.log('🔐 Creating signer - requesting accounts...');
-    
-    if (window.ethereum) {
-      await window.ethereum.request({
-        method: 'eth_requestAccounts'
-      });
-      this.signer = await this.provider.getSigner();
-      console.log('✅ Signer created:', await this.signer.getAddress());
-    } else {
-      throw new Error('No wallet connection. Please connect your wallet.');
-    }
+    console.log('🔐 Creating signer from window.ethereum...');
+    await window.ethereum.request({
+      method: 'eth_requestAccounts'
+    });
+    this.signer = await this.provider.getSigner();
+    console.log('✅ Signer created from window.ethereum');
   }
 
   /**
@@ -214,9 +242,31 @@ export class BlockchainService {
 
   /**
    * Get current signer
+   * On mobile, gets signer from AppKit provider
    */
   getSigner(): ethers.Signer | null {
     return this.signer;
+  }
+
+  /**
+   * Set signer from WalletContext/AppKit
+   */
+  async setSigner(newSigner: ethers.Signer): Promise<void> {
+    this.signer = newSigner;
+
+    // Refresh chainId from the signer's provider to ensure it's current
+    if (newSigner.provider) {
+      try {
+        const network = await newSigner.provider.getNetwork();
+        this.chainId = Number(network.chainId);
+        console.log('✅ Signer set, chainId refreshed:', this.chainId);
+      } catch (err) {
+        console.warn('⚠️ Could not refresh chainId:', err);
+      }
+    }
+
+    const address = await this.signer.getAddress();
+    console.log('✅ Signer set:', address);
   }
 
   /**

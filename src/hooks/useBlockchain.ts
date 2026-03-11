@@ -102,9 +102,16 @@ export function useBlockchain(): UseBlockchainReturn {
   useEffect(() => {
     if (signer) {
       blockchainService.setSigner(signer);
-      console.log('✅ Signer set in blockchainService');
+      console.log('✅ Signer set in blockchainService from WalletContext');
     }
   }, [signer]);
+
+  // Also update provider when it changes
+  useEffect(() => {
+    if (walletProvider) {
+      console.log('✅ Provider updated in blockchainService');
+    }
+  }, [walletProvider]);
 
   /**
    * Connect wallet - Uses WalletContext (AppKit)
@@ -202,6 +209,16 @@ export function useBlockchain(): UseBlockchainReturn {
     console.log('📝 Starting registration...');
     console.log('Wallet:', address);
     console.log('Data:', data);
+
+    // CRITICAL: Ensure signer is available before signing
+    // On mobile, this will get signer from AppKit
+    try {
+      await (blockchainService as any).ensureSigner();
+      console.log('✅ Signer ready for registration');
+    } catch (err) {
+      console.error('❌ Failed to ensure signer:', err);
+      throw new Error('Failed to connect to wallet for signing. Please try again.');
+    }
 
     const nonce = await getNonce();
     const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now

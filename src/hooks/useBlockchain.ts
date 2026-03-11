@@ -203,7 +203,7 @@ export function useBlockchain(): UseBlockchainReturn {
   const signAndRegister = useCallback(async (data: RegisterData): Promise<any> => {
     const address = await blockchainService.getWalletAddress();
     if (!address) {
-      throw new Error('Wallet not connected');
+      throw new Error('Wallet not connected. Please connect your wallet first.');
     }
 
     console.log('📝 Starting registration...');
@@ -215,35 +215,45 @@ export function useBlockchain(): UseBlockchainReturn {
     try {
       await (blockchainService as any).ensureSigner();
       console.log('✅ Signer ready for registration');
-    } catch (err) {
-      console.error('❌ Failed to ensure signer:', err);
-      throw new Error('Failed to connect to wallet for signing. Please try again.');
+      
+      // Log signer info for debugging
+      const signerAddress = await blockchainService.getSigner()?.getAddress();
+      console.log('🔐 Signer address:', signerAddress);
+    } catch (err: any) {
+      console.error('❌ Failed to ensure signer:', err.message);
+      console.error('Full error:', err);
+      throw new Error(`Failed to connect to wallet for signing: ${err.message}. Please make sure MetaMask is connected and try again.`);
     }
 
     const nonce = await getNonce();
     const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
 
     // Sign the message (with contract and forwarder addresses)
-    const { signature, message } = await blockchainService.signRegisterTourist(
-      data.username,
-      data.email,
-      data.phone,
-      data.dateOfBirth,
-      nonce,
-      deadline,
-      FORWARDER_ADDRESS,
-      CONTRACT_ADDRESS
-    );
+    try {
+      const { signature, message } = await blockchainService.signRegisterTourist(
+        data.username,
+        data.email,
+        data.phone,
+        data.dateOfBirth,
+        nonce,
+        deadline,
+        FORWARDER_ADDRESS,
+        CONTRACT_ADDRESS
+      );
 
-    console.log('✅ Signature created, submitting to backend...');
+      console.log('✅ Signature created, submitting to backend...');
 
-    // Submit to backend relayer
-    return await blockchainService.submitMetaTransaction(
-      'register',
-      signature,
-      message,
-      address
-    );
+      // Submit to backend relayer
+      return await blockchainService.submitMetaTransaction(
+        'register',
+        signature,
+        message,
+        address
+      );
+    } catch (signErr: any) {
+      console.error('❌ Failed to sign registration:', signErr.message);
+      throw new Error(`Failed to sign registration: ${signErr.message}. Please try again.`);
+    }
   }, [getNonce]);
 
   /**

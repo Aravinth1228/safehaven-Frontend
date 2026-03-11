@@ -232,10 +232,10 @@ const SignUp: React.FC = () => {
         description: `Tourist ID: ${blockchainResult.data?.touristId || 'N/A'}`,
       });
 
-      // Step 3: Register user in MongoDB (for faster queries and additional data)
+      // Step 3: Update location in MongoDB (blockchain meta-tx already saved profile)
       toast({
-        title: 'Creating Profile',
-        description: 'Saving your profile to database...',
+        title: 'Updating Location',
+        description: 'Saving your location to database...',
       });
 
       // Get current location for initial registration
@@ -254,32 +254,13 @@ const SignUp: React.FC = () => {
 
         currentLat = position.coords.latitude;
         currentLng = position.coords.longitude;
-        // No reverse geocoding - only coordinates stored
+        
+        // Update location via blockchain endpoint (also updates MongoDB)
+        await signAndUpdateLocation(currentLat, currentLng);
+        console.log('✅ Location updated successfully');
       } catch (err) {
         console.warn('Could not get location for registration:', err);
-      }
-
-      const success = await register(
-        {
-          username: formData.username,
-          email: formData.email,
-          phone: formData.phone,
-          dob: formData.dob,
-          walletAddress: walletAddress,
-          touristId: blockchainResult.data?.touristId || '',
-        },
-        formData.password,
-        currentLat,
-        currentLng
-      );
-
-      if (!success) {
-        toast({
-          title: 'Database Registration Warning',
-          description: 'Blockchain registration succeeded but database registration failed. You can still login.',
-          variant: 'default',
-        });
-        // Still redirect even if MongoDB fails - blockchain is the source of truth
+        // Continue without location - user can update later
       }
 
       // Auto-redirect to dashboard immediately

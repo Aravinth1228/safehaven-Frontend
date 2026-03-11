@@ -134,10 +134,8 @@ export const useBlockchainDangerZones = () => {
       const latInt = Math.round(zoneData.lat * 1e6);
       const lngInt = Math.round(zoneData.lng * 1e6);
 
-      // Get current nonce
-      const nonceResponse = await fetch(`${API_BASE}/blockchain/nonce?wallet=${walletAddress}`);
-      const nonceData = await nonceResponse.json();
-      const nonce = nonceData.nonce;
+      // Get current nonce from forwarder contract on-chain
+      const nonce = await blockchainService.getNonce(walletAddress);
 
       // Get deployment info for contract addresses
       const deploymentResponse = await fetch(`${API_BASE}/blockchain/deployment-info`);

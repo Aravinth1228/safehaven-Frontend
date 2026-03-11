@@ -39,7 +39,27 @@ export const appKit = createAppKit({
 });
 
 export async function getProvider() {
-  return await appKit.getProvider();
+  // Wait for AppKit to be ready
+  let attempts = 0;
+  const maxAttempts = 20; // Increased from 10 to 20
+
+  while (attempts < maxAttempts) {
+    const provider = await appKit.getProvider();
+    if (provider) {
+      console.log('✅ Got provider from AppKit');
+      return provider;
+    }
+
+    attempts++;
+    console.log(`⏳ Waiting for provider... (${attempts}/${maxAttempts})`);
+    await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms
+  }
+
+  // Final attempt - get provider directly from AppKit state
+  const state = appKit.getState();
+  console.log('🔍 AppKit state:', state);
+  
+  throw new Error('Provider not available from AppKit after multiple attempts. Please try reconnecting.');
 }
 
 export async function getSigner() {
@@ -86,23 +106,34 @@ export async function signTypedData(
   types: Record<string, Array<ethers.TypedDataField>>,
   value: Record<string, any>
 ): Promise<string> {
-  // Get provider from AppKit
-  const provider = await getProvider();
+  // Try to get provider from AppKit first
+  let provider: any = null;
   
-  if (!provider) {
-    throw new Error('No provider available from AppKit');
+  try {
+    provider = await appKit.getProvider();
+  } catch (err) {
+    console.warn('⚠️ Could not get provider from AppKit, using window.ethereum fallback');
   }
-  
+
+  // If AppKit provider not available, use window.ethereum (MetaMask mobile browser)
+  if (!provider && window.ethereum) {
+    provider = window.ethereum;
+  }
+
+  if (!provider) {
+    throw new Error('No provider available. Please connect wallet first.');
+  }
+
   // Get user address
-  const address = await getConnectedAddress();
-  
+  const address = appKit.getAddress() || await getConnectedAddress();
+
   if (!address) {
     throw new Error('No address connected');
   }
-  
+
   // Use ethers to hash the typed data
   const hashedTypedData = ethers.TypedDataEncoder.hash(domain, types, value);
-  
+
   // Request signature from provider (this triggers MetaMask on mobile!)
   const signature = await provider.request({
     method: 'eth_signTypedData_v4',
@@ -113,7 +144,7 @@ export async function signTypedData(
       message: value
     })]
   });
-  
+
   return signature as string;
 }
 

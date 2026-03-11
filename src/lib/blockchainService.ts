@@ -141,17 +141,38 @@ export class BlockchainService {
       return;
     }
 
-    console.log('🔐 No signer available, trying to get from AppKit...');
+    console.log('🔐 No signer available, waiting for WalletContext/AppKit...');
 
-    // Try to get signer from AppKit (for mobile)
+    // Wait for signer from WalletContext (AppKit handles the connection)
+    // Give more time for the wallet connection to complete
+    const maxWaitAttempts = 30; // 15 seconds total
+    for (let i = 0; i < maxWaitAttempts; i++) {
+      if (this.signer) {
+        console.log('✅ Signer became available from WalletContext');
+        return;
+      }
+      console.log(`⏳ Waiting for signer from WalletContext... (${i + 1}/${maxWaitAttempts})`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // If still no signer, try to get directly from AppKit
+    console.log('🔐 Signer not available from WalletContext, trying AppKit directly...');
     try {
-      const { getSigner: getAppKitSigner } = await import('./walletConnect');
+      const { getSigner: getAppKitSigner, getConnectedAddress } = await import('./walletConnect');
+
+      // First check if connected
+      const { isConnected: appKitIsConnected } = await import('./walletConnect');
+      if (!appKitIsConnected()) {
+        throw new Error('AppKit not connected. Please connect wallet first.');
+      }
+
       const appkitSigner = await getAppKitSigner();
-      
-      if (appkitSigner) {
+      const address = await getConnectedAddress();
+
+      if (appkitSigner && address) {
         this.signer = appkitSigner;
-        console.log('✅ Got signer from AppKit');
-        
+        console.log('✅ Got signer from AppKit:', address);
+
         // Refresh chainId
         if (appkitSigner.provider) {
           try {
@@ -163,9 +184,12 @@ export class BlockchainService {
           }
         }
         return;
+      } else {
+        throw new Error('AppKit returned null signer or address');
       }
-    } catch (err) {
-      console.warn('⚠️ Could not get signer from AppKit:', err);
+    } catch (err: any) {
+      console.warn('⚠️ Could not get signer from AppKit:', err.message);
+      // Don't throw yet, try fallback
     }
 
     // Fallback to window.ethereum (desktop)
@@ -249,27 +273,6 @@ export class BlockchainService {
   }
 
   /**
-   * Set signer from WalletContext/AppKit
-   */
-  async setSigner(newSigner: ethers.Signer): Promise<void> {
-    this.signer = newSigner;
-
-    // Refresh chainId from the signer's provider to ensure it's current
-    if (newSigner.provider) {
-      try {
-        const network = await newSigner.provider.getNetwork();
-        this.chainId = Number(network.chainId);
-        console.log('✅ Signer set, chainId refreshed:', this.chainId);
-      } catch (err) {
-        console.warn('⚠️ Could not refresh chainId:', err);
-      }
-    }
-
-    const address = await this.signer.getAddress();
-    console.log('✅ Signer set:', address);
-  }
-
-  /**
    * Get domain separator for EIP-712 (using Forwarder contract)
    * IMPORTANT: OpenZeppelin ERC2771Forwarder uses hardcoded name "ERC2771Forwarder"
    * NOT the custom name passed to the constructor!
@@ -334,24 +337,18 @@ export class BlockchainService {
     console.log('Domain:', domain);
     console.log('ForwardRequest:', { ...message, data: message.data?.substring(0, 20) + '...' });
 
-    // Check if on mobile - use AppKit signTypedData for proper MetaMask popup
-    const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    
     let signature: string;
-    if (isMobileDevice) {
-      console.log('📱 Mobile detected - using AppKit signTypedData');
-      // Use AppKit's signTypedData - triggers MetaMask app on mobile!
-      const { signTypedData: appKitSignTypedData } = await import('./walletConnect');
-      signature = await appKitSignTypedData(domain, { ForwardRequest: FORWARD_REQUEST_TYPE }, message);
-    } else {
-      console.log('🖥️ Desktop detected - using ethers signer');
-      // Use ethers signer on desktop
-      signature = await this.signer!.signTypedData(
-        domain,
-        { ForwardRequest: FORWARD_REQUEST_TYPE },
-        message
-      );
-    }
+    
+    // Use the signer's provider directly - works for both mobile and desktop
+    // The signer from WalletContext already has the correct provider
+    console.log('🔐 Using signer from WalletContext for signing');
+    
+    // Sign using ethers signer (works with AppKit provider)
+    signature = await this.signer!.signTypedData(
+      domain,
+      { ForwardRequest: FORWARD_REQUEST_TYPE },
+      message
+    );
 
     console.log('✅ Signature created:', signature);
     return { signature, message };
@@ -359,7 +356,6 @@ export class BlockchainService {
 
   /**
    * Sign update status message using EIP-712 (ForwardRequest type for ERC2771)
-   * Uses AppKit signTypedData on mobile for proper MetaMask popup
    */
   async signUpdateStatus(
     status: number,
@@ -391,29 +387,19 @@ export class BlockchainService {
       data: statusData
     };
 
-    // Check if on mobile - use AppKit signTypedData
-    const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    
-    let signature: string;
-    if (isMobileDevice) {
-      console.log('📱 Mobile detected - using AppKit signTypedData');
-      const { signTypedData: appKitSignTypedData } = await import('./walletConnect');
-      signature = await appKitSignTypedData(domain, { ForwardRequest: FORWARD_REQUEST_TYPE }, message);
-    } else {
-      console.log('🖥️ Desktop detected - using ethers signer');
-      signature = await this.signer!.signTypedData(
-        domain,
-        { ForwardRequest: FORWARD_REQUEST_TYPE },
-        message
-      );
-    }
+    // Sign using the signer from WalletContext - works for both mobile and desktop
+    console.log('🔐 Using signer from WalletContext for signing (updateStatus)');
+    const signature = await this.signer!.signTypedData(
+      domain,
+      { ForwardRequest: FORWARD_REQUEST_TYPE },
+      message
+    );
 
     return { signature, message };
   }
 
   /**
    * Sign update location message using EIP-712 (ForwardRequest type for ERC2771)
-   * Uses AppKit signTypedData on mobile for proper MetaMask popup
    */
   async signUpdateLocation(
     latitude: number,
@@ -448,22 +434,13 @@ export class BlockchainService {
       data: locationData
     };
 
-    // Check if on mobile - use AppKit signTypedData
-    const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    
-    let signature: string;
-    if (isMobileDevice) {
-      console.log('📱 Mobile detected - using AppKit signTypedData');
-      const { signTypedData: appKitSignTypedData } = await import('./walletConnect');
-      signature = await appKitSignTypedData(domain, { ForwardRequest: FORWARD_REQUEST_TYPE }, message);
-    } else {
-      console.log('🖥️ Desktop detected - using ethers signer');
-      signature = await this.signer!.signTypedData(
-        domain,
-        { ForwardRequest: FORWARD_REQUEST_TYPE },
-        message
-      );
-    }
+    // Sign using the signer from WalletContext - works for both mobile and desktop
+    console.log('🔐 Using signer from WalletContext for signing (updateLocation)');
+    const signature = await this.signer!.signTypedData(
+      domain,
+      { ForwardRequest: FORWARD_REQUEST_TYPE },
+      message
+    );
 
     return { signature, message };
   }
@@ -499,12 +476,39 @@ export class BlockchainService {
   }
 
   /**
-   * Get current nonce from backend
+   * Get current nonce from the backend API
+   * Backend tracks nonces for meta-transactions
    */
   async getNonce(walletAddress: string): Promise<number> {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/blockchain/nonce?wallet=${walletAddress}`);
-    const data = await response.json();
-    return data.nonce;
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/blockchain/nonce?wallet=${walletAddress}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch nonce from backend');
+      }
+
+      const data = await response.json();
+      return data.nonce;
+    } catch (error: any) {
+      console.warn('⚠️ Backend nonce fetch failed, falling back to on-chain:', error.message);
+
+      // Fallback: Get nonce from forwarder contract on-chain
+      const FORWARDER_ABI = [
+        "function getNonce(address owner) external view returns (uint256)"
+      ];
+
+      try {
+        const forwarder = new ethers.Contract(this.forwarderAddress, FORWARDER_ABI, this.provider);
+        const nonceBigInt = await forwarder.getNonce(walletAddress);
+        return Number(nonceBigInt);
+      } catch (fallbackError: any) {
+        if (fallbackError?.reason === "require(false)" || fallbackError?.code === "CALL_EXCEPTION") {
+          console.log('ℹ️ New user detected, starting with nonce 0');
+          return 0;
+        }
+        throw fallbackError;
+      }
+    }
   }
 
   /**

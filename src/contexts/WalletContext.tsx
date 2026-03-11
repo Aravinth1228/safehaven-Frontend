@@ -164,7 +164,14 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         
         // Log less frequently to reduce noise
         if (attempts < 10 || attempts % 10 === 0) {
-          console.log(`🔍 Waiting for WalletConnect... (${attempts + 1}/${maxAttempts}) Address: ${address}, State:`, state);
+          console.log(`🔍 Waiting for WalletConnect... (${attempts + 1}/${maxAttempts}) Address: ${address}`);
+          if (address) {
+            console.log('🔍 AppKit state:', {
+              isConnected: state.isConnected,
+              loading: state.loading,
+              address: state.address
+            });
+          }
         }
 
         // Check for ADDRESS instead of isConnected (AppKit bug on mobile)
@@ -172,7 +179,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           console.log('✅ Wallet connected successfully:', address);
           // Wait extra time for WalletConnect mobile app provider to initialize
           console.log('⏳ Waiting for WalletConnect provider to initialize...');
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
           break;
         }
         attempts++;

@@ -39,9 +39,11 @@ export const appKit = createAppKit({
 });
 
 export async function getProvider() {
+  console.log('🔍 Starting getProvider()...');
+  
   // Wait for AppKit to be ready
   let attempts = 0;
-  const maxAttempts = 40;
+  const maxAttempts = 60; // 30 seconds total (500ms * 60)
 
   while (attempts < maxAttempts) {
     try {
@@ -55,15 +57,22 @@ export async function getProvider() {
       console.warn('⚠️ getProvider() attempt ' + attempts + ' failed:', err);
     }
 
-    // Check connection state - use ADDRESS instead of isConnected (mobile bug)
+    // Check connection state
     const address = appKit.getAddress();
+    const state = appKit.getState();
     
     if (address) {
-      console.log('🔍 WalletConnect connected:', address, '- waiting for provider...');
+      console.log('🔍 WalletConnect connected:', address, '- waiting for provider... (attempt ' + attempts + ')');
+      console.log('🔍 AppKit state:', {
+        isConnected: state.isConnected,
+        loading: state.loading,
+        open: state.open,
+        address: state.address
+      });
     }
 
     attempts++;
-    if (attempts <= 15 || attempts % 10 === 0) {
+    if (attempts <= 20 || attempts % 10 === 0) {
       console.log(`⏳ Waiting for WalletConnect provider... (${attempts}/${maxAttempts}) Address: ${address || 'none'}`);
     }
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -94,10 +103,15 @@ export async function getProvider() {
       return walletInfo.provider;
     }
 
-    // Try 3: Use window.ethereum if available (MetaMask mobile browser)
-    if (typeof window !== 'undefined' && (window as any).ethereum) {
-      console.log('✅ Using window.ethereum as fallback provider');
-      return (window as any).ethereum;
+    // Try 3: Check connectors for WalletConnect provider
+    const connectors = (state as any).connectors;
+    if (connectors && Array.isArray(connectors)) {
+      for (const connector of connectors) {
+        if (connector?.provider) {
+          console.log('✅ Got provider from connector');
+          return connector.provider;
+        }
+      }
     }
   }
 

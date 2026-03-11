@@ -151,6 +151,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       setTimeout(() => {
         const address = appKit.getAddress();
         console.log('📍 Connection attempt - Address:', address);
+        if (address) {
+          console.log('✅ Wallet connected successfully:', address);
+        }
       }, 2000);
     } catch (error) {
       console.error('Failed to connect wallet:', error);

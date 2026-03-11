@@ -2,59 +2,33 @@ import React, { useState } from 'react';
 import { Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { appKit } from '@/lib/walletConnect';
 
 /**
  * AddSepoliaButton Component
- * 
+ *
  * Adds Sepolia testnet to MetaMask with one click
+ * Works on both mobile (AppKit) and desktop (MetaMask)
  */
 const AddSepoliaButton: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const { toast } = useToast();
 
   const addSepoliaNetwork = async () => {
-    if (!window.ethereum) {
-      toast({
-        title: 'MetaMask Not Found',
-        description: 'Please install MetaMask to add Sepolia network',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsAdding(true);
     try {
       const chainId = 11155111;
-      
-      await window.ethereum.request({
-        method: 'wallet_addEthereumChain',
-        params: [{
-          chainId: `0x${chainId.toString(16)}`,
-          chainName: 'Sepolia Testnet',
-          nativeCurrency: {
-            name: 'Sepolia Ether',
-            symbol: 'SepoliaETH',  // Must match existing network
-            decimals: 18
-          },
-          rpcUrls: ['https://ethereum-sepolia-rpc.publicnode.com'],
-          blockExplorerUrls: ['https://sepolia.etherscan.io'],
-        }],
-      });
+
+      // Use AppKit to switch/add network (works on mobile too!)
+      await appKit.switchNetwork(11155111);
 
       toast({
         title: 'Sepolia Added!',
-        description: 'Sepolia testnet has been added to MetaMask',
+        description: 'Sepolia testnet has been added to wallet',
       });
     } catch (error: any) {
       console.error('Failed to add Sepolia:', error);
-      
-      if (error.code === 4902) {
-        toast({
-          title: 'Failed to Add Network',
-          description: 'Your wallet does not support adding networks',
-          variant: 'destructive',
-        });
-      } else if (error.message?.includes('User rejected')) {
+
+      if (error.message?.includes('User rejected')) {
         toast({
           title: 'Request Rejected',
           description: 'You rejected the network addition request',
@@ -78,23 +52,11 @@ const AddSepoliaButton: React.FC = () => {
   };
 
   const switchToSepolia = async () => {
-    if (!window.ethereum) {
-      toast({
-        title: 'MetaMask Not Found',
-        description: 'Please install MetaMask',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsAdding(true);
     try {
       const chainId = 11155111;
-      
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: `0x${chainId.toString(16)}` }],
-      });
+
+      // Use AppKit to switch network
+      await appKit.switchNetwork(11155111);
 
       toast({
         title: 'Switched to Sepolia!',
@@ -102,9 +64,9 @@ const AddSepoliaButton: React.FC = () => {
       });
     } catch (error: any) {
       console.error('Failed to switch to Sepolia:', error);
-      
+
       // If network doesn't exist, offer to add it
-      if (error.code === 4902) {
+      if (error.code === 4902 || error.message?.includes('Unrecognized chain ID')) {
         toast({
           title: 'Sepolia Not Found',
           description: 'Adding Sepolia network...',

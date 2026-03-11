@@ -3,24 +3,10 @@ import { EthersAdapter } from '@reown/appkit-adapter-ethers';
 import { sepolia, mainnet } from '@reown/appkit/networks';
 import { ethers } from 'ethers';
 
-// Get project ID from environment or use default (for testing)
-// IMPORTANT: Get your own from https://cloud.reown.com
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '8e28c9e8e8e8e8e8e8e8e8e8e8e8e8e8';
 
-// Define networks with proper chain configuration
-const networks = [
-  {
-    ...sepolia,
-    rpcUrls: {
-      default: {
-        http: ['https://sepolia.infura.io/v3/']
-      }
-    }
-  },
-  mainnet
-];
+const networks = [sepolia, mainnet];
 
-// Create AppKit instance with mobile-optimized settings
 export const appKit = createAppKit({
   adapters: [new EthersAdapter()],
   networks,
@@ -34,16 +20,13 @@ export const appKit = createAppKit({
   themeMode: 'light',
   themeVariables: {
     '--w3m-accent': '#3b82f6',
-    '--w3m-color-mix': '#3b82f6',
   },
-  // Enable all connection methods for mobile
   features: {
     email: false,
     socials: false,
     analytics: true,
     allWallets: true,
   },
-  // Mobile-specific configuration
   enableWallets: true,
   includeWalletIds: [
     'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
@@ -52,61 +35,48 @@ export const appKit = createAppKit({
   ],
 });
 
-// Helper to get provider and signer
 export async function getProvider() {
-  const provider = await appKit.getProvider();
-  return provider;
+  return await appKit.getProvider();
 }
 
 export async function getSigner() {
   const provider = await getProvider();
-  if (!provider) {
-    throw new Error('Provider not available');
-  }
-  const browserProvider = new ethers.BrowserProvider(provider);
+  if (!provider) throw new Error('Provider not available');
+  const browserProvider = new ethers.BrowserProvider(provider as any);
   return await browserProvider.getSigner();
 }
 
-// Get connected address
 export async function getConnectedAddress() {
-  const address = appKit.getAddress();
-  return address;
+  return appKit.getAddress();
 }
 
-// Check if connected
-export function isConnected() {
+export function isConnected(): boolean {
   return appKit.getState().isConnected;
 }
 
-// Subscribe to connection changes
 export function onConnectionChange(callback: (connected: boolean, address?: string) => void) {
   return appKit.subscribeAccount((state) => {
     callback(state.isConnected, state.address);
   });
 }
 
-// Disconnect
 export async function disconnect() {
   await appKit.disconnect();
 }
 
-// Open modal
 export function openModal() {
   appKit.open();
 }
 
-// Close modal
 export function closeModal() {
   appKit.close();
 }
 
-// Re-export mobile MetaMask utilities for convenience
 export {
   isMobile,
   isMetaMaskInstalled,
   openMetaMask,
   connectMetaMask,
-  smartConnect,
   generateMetaMaskLink,
   getConnectionMethod
 } from './metamaskMobile';

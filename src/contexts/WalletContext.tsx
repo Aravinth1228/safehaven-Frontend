@@ -140,23 +140,46 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setIsConnecting(true);
     try {
       console.log('🔗 Connecting wallet... Mobile:', checkIsMobile(), 'MetaMask:', checkIsMetaMaskInstalled());
-      
+
       // Use AppKit for ALL connections (mobile + desktop)
-      // AppKit automatically handles:
-      // - Mobile: MetaMask app + WalletConnect
-      // - Desktop: MetaMask extension + WalletConnect
+      console.log('📍 Opening AppKit modal...');
       openModal();
-      
+
       // Wait for connection and log the result
-      setTimeout(() => {
+      let attempts = 0;
+      const maxAttempts = 40; // 20 seconds total (500ms * 40)
+      
+      while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 500));
         const address = appKit.getAddress();
-        console.log('📍 Connection attempt - Address:', address);
-        if (address) {
+        const connected = appKit.getState().isConnected;
+        
+        console.log(`🔍 Waiting for connection... (${attempts + 1}/${maxAttempts}) Address: ${address}, Connected: ${connected}`);
+        
+        if (address && connected) {
           console.log('✅ Wallet connected successfully:', address);
+          break;
         }
-      }, 2000);
+        attempts++;
+      }
+      
+      // Final check
+      const finalAddress = appKit.getAddress();
+      if (!finalAddress) {
+        console.warn('⚠️ Wallet connection attempt timed out');
+        toast({
+          title: 'Connection Timeout',
+          description: 'Please try connecting your wallet again',
+          variant: 'destructive',
+        });
+      }
     } catch (error) {
       console.error('Failed to connect wallet:', error);
+      toast({
+        title: 'Connection Failed',
+        description: error instanceof Error ? error.message : 'Failed to connect wallet',
+        variant: 'destructive',
+      });
       throw error;
     } finally {
       setIsConnecting(false);

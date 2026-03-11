@@ -57,7 +57,6 @@ export async function getProvider() {
 
     // Check connection state - use ADDRESS instead of isConnected (mobile bug)
     const address = appKit.getAddress();
-    const state = appKit.getState();
     
     if (address) {
       console.log('🔍 WalletConnect connected:', address, '- waiting for provider...');
@@ -75,8 +74,9 @@ export async function getProvider() {
   const state = appKit.getState();
   console.log('🔍 Final AppKit state:', state, 'Address:', address);
 
-  // If we have an address but no provider, try one more time
+  // If we have an address but no provider from AppKit, try fallbacks
   if (address) {
+    // Try 1: Get provider one more time
     try {
       const provider = await appKit.getProvider();
       if (provider) {
@@ -87,11 +87,17 @@ export async function getProvider() {
       console.warn('⚠️ Final getProvider() attempt failed:', err);
     }
 
-    // Check wallet provider from AppKit's internal state
+    // Try 2: Check walletInfo from AppKit's internal state
     const walletInfo = (state as any).walletInfo;
     if (walletInfo?.provider) {
       console.log('✅ Got provider from walletInfo');
       return walletInfo.provider;
+    }
+
+    // Try 3: Use window.ethereum if available (MetaMask mobile browser)
+    if (typeof window !== 'undefined' && (window as any).ethereum) {
+      console.log('✅ Using window.ethereum as fallback provider');
+      return (window as any).ethereum;
     }
   }
 

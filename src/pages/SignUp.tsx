@@ -189,18 +189,18 @@ const SignUp: React.FC = () => {
 
       // CRITICAL: Re-check wallet connection and refresh signer
       // This fixes the issue where wallet appears connected but signer is lost
-      const { isConnected: checkConnection, getSigner, getConnectedAddress } = await import('../lib/walletConnect');
-      
-      const stillConnected = checkConnection();
+      const { getSigner, getConnectedAddress } = await import('../lib/walletConnect');
+
+      // NOTE: Don't use isConnected() - it returns false on mobile (AppKit bug)
+      // Instead, check if we have an address
       const currentAddress = await getConnectedAddress();
-      
+
       console.log('🔍 Connection check:', {
-        connected: stillConnected,
         currentAddress,
         contextAddress: walletAddress
       });
 
-      if (!stillConnected || !currentAddress) {
+      if (!currentAddress) {
         throw new Error('Wallet disconnected. Please reconnect and try again.');
       }
 

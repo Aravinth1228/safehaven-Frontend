@@ -57,18 +57,9 @@ const Login: React.FC = () => {
   };
 
   const handleMetaMaskLogin = async () => {
-    if (!isMetaMaskInstalled) {
-      toast({
-        title: 'MetaMask Not Found',
-        description: 'Please install MetaMask to login with your wallet.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     try {
       await connectWallet();
-      
+
       // Wait for wallet address to be available
       setTimeout(async () => {
         const address = localStorage.getItem('walletAddress');
@@ -207,11 +198,11 @@ const Login: React.FC = () => {
                 <Wallet className="w-5 h-5 ml-2" />
               </Button>
 
-              {!isMetaMaskInstalled && (
-                <p className="text-xs text-destructive text-center">
-                  MetaMask is not installed.{' '}
-                  <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline">
-                    Install here
+              {!isMetaMaskInstalled && !walletAddress && (
+                <p className="text-xs text-muted-foreground text-center">
+                  💡 Tip: Install MetaMask for faster login
+                  <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline ml-1">
+                    Get MetaMask
                   </a>
                 </p>
               )}

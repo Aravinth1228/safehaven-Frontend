@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { blockchainService } from '../lib/blockchainService';
+import { useWallet } from '../contexts/WalletContext';
 
 export interface WalletState {
   isConnected: boolean;
@@ -54,9 +55,11 @@ console.log('📝 Forwarder Address:', FORWARDER_ADDRESS);
 
 /**
  * React hook for blockchain interactions
- * Simple direct MetaMask connection with EIP-712 signing
+ * Uses WalletContext provider (works with AppKit on mobile)
  */
 export function useBlockchain(): UseBlockchainReturn {
+  const { provider: walletProvider, signer, walletAddress, isConnected } = useWallet();
+  
   const [walletState, setWalletState] = useState<WalletState>({
     isConnected: false,
     address: null,
@@ -78,53 +81,61 @@ export function useBlockchain(): UseBlockchainReturn {
     init();
   }, []);
 
-  // Check for existing connection
+  // Update wallet state when WalletContext connection changes
   useEffect(() => {
-    const checkExisting = async () => {
-      const connected = await blockchainService.isConnected();
-      if (connected) {
-        const address = await blockchainService.getWalletAddress();
-        if (address) {
-          setWalletState(prev => ({
-            ...prev,
-            isConnected: true,
-            address
-          }));
-        }
-      }
-    };
-    checkExisting();
-  }, []);
+    if (isConnected && walletAddress) {
+      setWalletState(prev => ({
+        ...prev,
+        isConnected: true,
+        address: walletAddress
+      }));
+    } else {
+      setWalletState(prev => ({
+        ...prev,
+        isConnected: false,
+        address: null
+      }));
+    }
+  }, [isConnected, walletAddress]);
+
+  // Set signer in blockchainService when it changes
+  useEffect(() => {
+    if (signer) {
+      blockchainService.setSigner(signer);
+      console.log('✅ Signer set in blockchainService');
+    }
+  }, [signer]);
 
   /**
-   * Connect wallet - Direct MetaMask
+   * Connect wallet - Uses WalletContext (AppKit)
+   * Note: On mobile, wallet should already be connected via WalletContext
    */
   const connectWallet = useCallback(async (): Promise<string> => {
     setWalletState(prev => ({ ...prev, isConnecting: true, error: null }));
 
     try {
       console.log('🔗 Connecting wallet...');
+
+      // If already connected via WalletContext, use that address
+      if (walletAddress) {
+        console.log('✅ Already connected via WalletContext:', walletAddress);
+        setWalletState(prev => ({
+          ...prev,
+          isConnected: true,
+          address: walletAddress,
+          isConnecting: false
+        }));
+        return walletAddress;
+      }
+
+      // Fallback: Try to get from blockchainService
+      const address = await blockchainService.getWalletAddress();
       
-      // Request account access from MetaMask
-      if (!window.ethereum) {
-        throw new Error('MetaMask not installed');
+      if (!address) {
+        throw new Error('No wallet address available. Please connect wallet first.');
       }
 
-      const accounts = await window.ethereum.request({ 
-        method: 'eth_requestAccounts' 
-      }) as string[];
-
-      if (accounts.length === 0) {
-        throw new Error('No accounts returned');
-      }
-
-      const address = accounts[0];
       console.log('✅ Wallet connected:', address);
-
-      // Create provider and set signer
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      await blockchainService.setSigner(signer);
 
       setWalletState(prev => ({
         ...prev,
@@ -143,7 +154,7 @@ export function useBlockchain(): UseBlockchainReturn {
       }));
       throw error;
     }
-  }, []);
+  }, [walletAddress]);
 
   /**
    * Disconnect wallet

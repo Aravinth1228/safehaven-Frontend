@@ -21,6 +21,9 @@ const Login: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginMethod, setLoginMethod] = useState<'credentials' | 'wallet'>('credentials');
 
+  // Check if on mobile device
+  const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -198,7 +201,8 @@ const Login: React.FC = () => {
                 <Wallet className="w-5 h-5 ml-2" />
               </Button>
 
-              {!isMetaMaskInstalled && !walletAddress && (
+              {/* Show install tip ONLY on desktop without MetaMask */}
+              {!isMetaMaskInstalled && !walletAddress && !isMobileDevice && (
                 <p className="text-xs text-muted-foreground text-center">
                   💡 Tip: Install MetaMask for faster login
                   <a href="https://metamask.io" target="_blank" rel="noopener noreferrer" className="underline ml-1">

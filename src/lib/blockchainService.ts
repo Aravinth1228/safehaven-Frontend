@@ -53,74 +53,74 @@ export class BlockchainService {
     this.contractAddress = contractAddress;
     this.forwarderAddress = forwarderAddress;
 
+    // Don't require window.ethereum - will use WalletContext provider instead
     if (!window.ethereum) {
-      console.warn('⚠️ MetaMask not installed');
-      return;
-    }
+      console.log('ℹ️ MetaMask not installed - will use WalletConnect/AppKit');
+    } else {
+      this.provider = new ethers.BrowserProvider(window.ethereum);
 
-    this.provider = new ethers.BrowserProvider(window.ethereum);
-    
-    // Switch to Sepolia network if not already on it
-    const requiredChainId = 11155111; // Sepolia
-    try {
-      const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' }) as string;
-      const currentChainId = parseInt(chainIdHex, 16);
-      
-      if (currentChainId !== requiredChainId) {
-        console.log('⚠️ Wrong network detected, switching to Sepolia...');
-        console.log('Current chainId:', currentChainId, 'Required:', requiredChainId);
-        
-        try {
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: `0x${requiredChainId.toString(16)}` }],
-          });
-          console.log('✅ Switched to Sepolia network');
-        } catch (switchError: any) {
-          // This error code indicates that the chain has not been added to MetaMask
-          if (switchError.code === 4902) {
-            console.log('⚠️ Sepolia not added to MetaMask, adding...');
+      // Switch to Sepolia network if not already on it
+      const requiredChainId = 11155111; // Sepolia
+      try {
+        const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' }) as string;
+        const currentChainId = parseInt(chainIdHex, 16);
+
+        if (currentChainId !== requiredChainId) {
+          console.log('⚠️ Wrong network detected, switching to Sepolia...');
+          console.log('Current chainId:', currentChainId, 'Required:', requiredChainId);
+
+          try {
             await window.ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: `0x${requiredChainId.toString(16)}`,
-                chainName: 'Sepolia Testnet',
-                nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
-                rpcUrls: ['https://ethereum-sepolia-rpc.publicnode.com'],
-                blockExplorerUrls: ['https://sepolia.etherscan.io'],
-              }],
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: `0x${requiredChainId.toString(16)}` }],
             });
-            console.log('✅ Sepolia network added');
-          } else {
-            console.error('❌ Failed to switch network:', switchError);
+            console.log('✅ Switched to Sepolia network');
+          } catch (switchError: any) {
+            // This error code indicates that the chain has not been added to MetaMask
+            if (switchError.code === 4902) {
+              console.log('⚠️ Sepolia not added to MetaMask, adding...');
+              await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: `0x${requiredChainId.toString(16)}`,
+                  chainName: 'Sepolia Testnet',
+                  nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
+                  rpcUrls: ['https://ethereum-sepolia-rpc.publicnode.com'],
+                  blockExplorerUrls: ['https://sepolia.etherscan.io'],
+                }],
+              });
+              console.log('✅ Sepolia network added');
+            } else {
+              console.error('❌ Failed to switch network:', switchError);
+            }
           }
+        } else {
+          console.log('✅ Already on Sepolia network');
         }
-      } else {
-        console.log('✅ Already on Sepolia network');
+      } catch (err) {
+        console.error('❌ Error checking/switching network:', err);
       }
-    } catch (err) {
-      console.error('❌ Error checking/switching network:', err);
-    }
 
-    // Refresh provider after network switch
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    const network = await this.provider.getNetwork();
-    this.chainId = Number(network.chainId);
-    
-    console.log('🔗 Final Chain ID:', this.chainId);
+      // Refresh provider after network switch
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const network = await this.provider.getNetwork();
+      this.chainId = Number(network.chainId);
 
-    // Check if already connected
-    try {
-      const accounts = await window.ethereum.request({
-        method: 'eth_accounts'
-      }) as string[];
+      console.log('🔗 Final Chain ID:', this.chainId);
 
-      if (accounts.length > 0) {
-        console.log('✅ Restoring existing wallet:', accounts[0]);
-        this.signer = await this.provider.getSigner();
+      // Check if already connected
+      try {
+        const accounts = await window.ethereum.request({
+          method: 'eth_accounts'
+        }) as string[];
+
+        if (accounts.length > 0) {
+          console.log('✅ Restoring existing wallet:', accounts[0]);
+          this.signer = await this.provider.getSigner();
+        }
+      } catch (err) {
+        console.log('ℹ️ No existing wallet connection');
       }
-    } catch (err) {
-      console.log('ℹ️ No existing wallet connection');
     }
 
     console.log('✅ BlockchainService initialized');
@@ -131,20 +131,29 @@ export class BlockchainService {
 
   /**
    * Ensure signer exists - CRITICAL for reliable signing
-   * This is the key fix for "Wallet not connected" errors
+   * Works with both window.ethereum and WalletContext
    */
   private async ensureSigner(): Promise<void> {
-    if (!this.provider) {
-      throw new Error('Provider not initialized');
+    // If signer already set (from WalletContext), use it
+    if (this.signer) {
+      return;
     }
 
-    if (!this.signer) {
-      console.log('🔐 Creating signer - requesting accounts...');
+    // Try to create from provider
+    if (!this.provider) {
+      throw new Error('Provider not initialized and no signer available. Please connect wallet first.');
+    }
+
+    console.log('🔐 Creating signer - requesting accounts...');
+    
+    if (window.ethereum) {
       await window.ethereum.request({
         method: 'eth_requestAccounts'
       });
       this.signer = await this.provider.getSigner();
       console.log('✅ Signer created:', await this.signer.getAddress());
+    } else {
+      throw new Error('No wallet connection. Please connect your wallet.');
     }
   }
 
@@ -169,6 +178,12 @@ export class BlockchainService {
    * Check if wallet is connected
    */
   async isConnected(): Promise<boolean> {
+    // If signer exists (from WalletContext), we're connected
+    if (this.signer) {
+      return true;
+    }
+
+    // Fallback to window.ethereum
     if (!window.ethereum) return false;
     try {
       const accounts = await window.ethereum.request({ method: 'eth_accounts' });
@@ -183,9 +198,16 @@ export class BlockchainService {
    */
   async getWalletAddress(): Promise<string | null> {
     try {
+      // If signer exists, use it
+      if (this.signer) {
+        return await this.signer.getAddress();
+      }
+
+      // Fallback to ensureSigner (which uses window.ethereum)
       await this.ensureSigner();
       return await this.signer!.getAddress();
-    } catch {
+    } catch (error: any) {
+      console.error('Failed to get wallet address:', error.message);
       return null;
     }
   }

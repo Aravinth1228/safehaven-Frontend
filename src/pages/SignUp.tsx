@@ -323,9 +323,12 @@ const SignUp: React.FC = () => {
     }
   };
 
-  // Show MetaMask guide if wallet is not connected AND MetaMask is not installed
-  // On mobile, isMetaMaskInstalled is false, but we can still connect via AppKit
-  const showGuide = !isConnected && !isMetaMaskInstalled;
+  // Show MetaMask guide ONLY if:
+  // 1. Wallet is not connected AND
+  // 2. MetaMask is not installed AND
+  // 3. NOT on mobile (mobile users can always connect via AppKit/WalletConnect)
+  const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const showGuide = !isConnected && !isMetaMaskInstalled && !isMobileDevice;
 
   if (showGuide) {
     return (

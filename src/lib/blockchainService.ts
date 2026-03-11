@@ -289,6 +289,7 @@ export class BlockchainService {
 
   /**
    * Sign register tourist message using EIP-712 (ForwardRequest type for ERC2771)
+   * Uses AppKit signTypedData on mobile for proper MetaMask popup
    */
   async signRegisterTourist(
     username: string,
@@ -308,6 +309,7 @@ export class BlockchainService {
     console.log('🔐 signRegisterTourist - chainId:', this.chainId);
     console.log('🔐 Forwarder:', forwarderAddress);
     console.log('🔐 Contract:', contractAddress);
+    console.log('🔐 User address:', userAddress);
 
     // Encode the function call data for registerTourist (WITH function selector)
     const registerInterface = new ethers.Interface([
@@ -332,11 +334,24 @@ export class BlockchainService {
     console.log('Domain:', domain);
     console.log('ForwardRequest:', { ...message, data: message.data?.substring(0, 20) + '...' });
 
-    const signature = await this.signer!.signTypedData(
-      domain,
-      { ForwardRequest: FORWARD_REQUEST_TYPE },
-      message
-    );
+    // Check if on mobile - use AppKit signTypedData for proper MetaMask popup
+    const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    let signature: string;
+    if (isMobileDevice) {
+      console.log('📱 Mobile detected - using AppKit signTypedData');
+      // Use AppKit's signTypedData - triggers MetaMask app on mobile!
+      const { signTypedData: appKitSignTypedData } = await import('./walletConnect');
+      signature = await appKitSignTypedData(domain, { ForwardRequest: FORWARD_REQUEST_TYPE }, message);
+    } else {
+      console.log('🖥️ Desktop detected - using ethers signer');
+      // Use ethers signer on desktop
+      signature = await this.signer!.signTypedData(
+        domain,
+        { ForwardRequest: FORWARD_REQUEST_TYPE },
+        message
+      );
+    }
 
     console.log('✅ Signature created:', signature);
     return { signature, message };
@@ -344,6 +359,7 @@ export class BlockchainService {
 
   /**
    * Sign update status message using EIP-712 (ForwardRequest type for ERC2771)
+   * Uses AppKit signTypedData on mobile for proper MetaMask popup
    */
   async signUpdateStatus(
     status: number,
@@ -375,17 +391,29 @@ export class BlockchainService {
       data: statusData
     };
 
-    const signature = await this.signer!.signTypedData(
-      domain,
-      { ForwardRequest: FORWARD_REQUEST_TYPE },
-      message
-    );
+    // Check if on mobile - use AppKit signTypedData
+    const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    let signature: string;
+    if (isMobileDevice) {
+      console.log('📱 Mobile detected - using AppKit signTypedData');
+      const { signTypedData: appKitSignTypedData } = await import('./walletConnect');
+      signature = await appKitSignTypedData(domain, { ForwardRequest: FORWARD_REQUEST_TYPE }, message);
+    } else {
+      console.log('🖥️ Desktop detected - using ethers signer');
+      signature = await this.signer!.signTypedData(
+        domain,
+        { ForwardRequest: FORWARD_REQUEST_TYPE },
+        message
+      );
+    }
 
     return { signature, message };
   }
 
   /**
    * Sign update location message using EIP-712 (ForwardRequest type for ERC2771)
+   * Uses AppKit signTypedData on mobile for proper MetaMask popup
    */
   async signUpdateLocation(
     latitude: number,
@@ -420,11 +448,22 @@ export class BlockchainService {
       data: locationData
     };
 
-    const signature = await this.signer!.signTypedData(
-      domain,
-      { ForwardRequest: FORWARD_REQUEST_TYPE },
-      message
-    );
+    // Check if on mobile - use AppKit signTypedData
+    const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    let signature: string;
+    if (isMobileDevice) {
+      console.log('📱 Mobile detected - using AppKit signTypedData');
+      const { signTypedData: appKitSignTypedData } = await import('./walletConnect');
+      signature = await appKitSignTypedData(domain, { ForwardRequest: FORWARD_REQUEST_TYPE }, message);
+    } else {
+      console.log('🖥️ Desktop detected - using ethers signer');
+      signature = await this.signer!.signTypedData(
+        domain,
+        { ForwardRequest: FORWARD_REQUEST_TYPE },
+        message
+      );
+    }
 
     return { signature, message };
   }

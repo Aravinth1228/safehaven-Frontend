@@ -77,6 +77,24 @@ export function closeModal() {
   appKit.close();
 }
 
+/**
+ * Sign typed data using AppKit (works on mobile!)
+ * This is the KEY function for mobile signature support
+ */
+export async function signTypedData(
+  domain: ethers.TypedDataDomain,
+  types: Record<string, Array<ethers.TypedDataField>>,
+  value: Record<string, any>
+): Promise<string> {
+  // Use AppKit's built-in signTypedData - this triggers MetaMask on mobile!
+  return await appKit.signTypedData({
+    domain,
+    types,
+    primaryType: Object.keys(types)[0],
+    message: value
+  });
+}
+
 export {
   isMobile,
   isMetaMaskInstalled,

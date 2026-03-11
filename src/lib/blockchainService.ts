@@ -225,21 +225,14 @@ export class BlockchainService {
    * NOT the custom name passed to the constructor!
    */
   private async getDomainSeparator(): Promise<ethers.TypedDataDomain> {
-    // CRITICAL: Get chainId directly from MetaMask to ensure it matches what the user sees
-    let chainIdFromMetaMask: number;
-    try {
-      const chainIdHex = await window.ethereum!.request({ method: 'eth_chainId' }) as string;
-      chainIdFromMetaMask = parseInt(chainIdHex, 16);
-      console.log('🔐 getDomainSeparator - chainId from MetaMask:', chainIdFromMetaMask);
-    } catch (err) {
-      console.error('❌ Failed to get chainId from MetaMask, using cached:', err);
-      chainIdFromMetaMask = this.chainId;
-    }
-
+    // Use cached chainId (works on mobile too)
+    // ChainId is set during initialization and updated when signer is set
+    console.log('🔐 getDomainSeparator - Using chainId:', this.chainId);
+    
     return {
       name: 'ERC2771Forwarder',  // MUST be exactly "ERC2771Forwarder" for OpenZeppelin
       version: '1',
-      chainId: chainIdFromMetaMask,  // Use chainId directly from MetaMask
+      chainId: this.chainId,
       verifyingContract: this.forwarderAddress
     };
   }
@@ -259,15 +252,12 @@ export class BlockchainService {
   ): Promise<{ signature: string; message: any }> {
     await this.ensureSigner();
 
-    // CRITICAL: Refresh chainId right before signing to ensure it matches current network
-    if (this.signer?.provider) {
-      const network = await this.signer.provider.getNetwork();
-      this.chainId = Number(network.chainId);
-      console.log('🔐 signRegisterTourist - Refreshed chainId:', this.chainId);
-    }
-
     const domain = await this.getDomainSeparator();
     const userAddress = await this.signer!.getAddress();
+
+    console.log('🔐 signRegisterTourist - chainId:', this.chainId);
+    console.log('🔐 Forwarder:', forwarderAddress);
+    console.log('🔐 Contract:', contractAddress);
 
     // Encode the function call data for registerTourist (WITH function selector)
     const registerInterface = new ethers.Interface([
@@ -290,8 +280,7 @@ export class BlockchainService {
 
     console.log('🔐 Signing EIP-712 ForwardRequest...');
     console.log('Domain:', domain);
-    console.log('ForwardRequest:', message);
-    console.log('🔐 chainId being used for signing:', this.chainId);
+    console.log('ForwardRequest:', { ...message, data: message.data?.substring(0, 20) + '...' });
 
     const signature = await this.signer!.signTypedData(
       domain,
@@ -315,15 +304,10 @@ export class BlockchainService {
   ): Promise<{ signature: string; message: any }> {
     await this.ensureSigner();
 
-    // CRITICAL: Refresh chainId right before signing
-    if (this.signer?.provider) {
-      const network = await this.signer.provider.getNetwork();
-      this.chainId = Number(network.chainId);
-      console.log('🔐 signUpdateStatus - Refreshed chainId:', this.chainId);
-    }
-
     const domain = await this.getDomainSeparator();
     const userAddress = await this.signer!.getAddress();
+
+    console.log('🔐 signUpdateStatus - chainId:', this.chainId);
 
     // Encode the function call data for updateStatus (WITH function selector)
     const statusInterface = new ethers.Interface([
@@ -363,15 +347,10 @@ export class BlockchainService {
   ): Promise<{ signature: string; message: any }> {
     await this.ensureSigner();
 
-    // CRITICAL: Refresh chainId right before signing
-    if (this.signer?.provider) {
-      const network = await this.signer.provider.getNetwork();
-      this.chainId = Number(network.chainId);
-      console.log('🔐 signUpdateLocation - Refreshed chainId:', this.chainId);
-    }
-
     const domain = await this.getDomainSeparator();
     const userAddress = await this.signer!.getAddress();
+
+    console.log('🔐 signUpdateLocation - chainId:', this.chainId);
 
     // Encode the function call data for updateLocation (WITH function selector)
     const locationInterface = new ethers.Interface([

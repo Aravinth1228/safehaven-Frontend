@@ -358,6 +358,10 @@ const SignUp: React.FC = () => {
         duration: 5000,
       });
 
+      // On mobile, if user registered via MetaMask deep link, they're already in MetaMask browser
+      // GPS will auto-enable on dashboard mount
+      console.log('📱 Redirecting to dashboard...');
+      
       // Redirect immediately (100ms for toast to show)
       setTimeout(() => {
         navigate('/dashboard');

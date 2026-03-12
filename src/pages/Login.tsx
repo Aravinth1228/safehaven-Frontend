@@ -61,11 +61,38 @@ const Login: React.FC = () => {
 
   const handleMetaMaskLogin = async () => {
     try {
+      console.log('🔗 Mobile MetaMask login initiated...');
+      
+      // On mobile, check if we should deep link to MetaMask
+      if (isMobileDevice && !isMetaMaskInstalled && !walletAddress) {
+        // User is on mobile regular browser (not in MetaMask)
+        // Deep link to MetaMask app
+        console.log('📱 Deep linking to MetaMask app...');
+        
+        const metaMaskDeepLink = `https://metamask.app.link/dapp/${window.location.hostname}${window.location.pathname}`;
+        
+        // Show toast
+        toast({
+          title: 'Opening MetaMask...',
+          description: 'Redirecting to MetaMask mobile app',
+          duration: 3000,
+        });
+        
+        // Wait a moment then redirect
+        setTimeout(() => {
+          window.location.href = metaMaskDeepLink;
+        }, 1000);
+        return;
+      }
+      
+      // If already in MetaMask browser or has MetaMask installed
       await connectWallet();
 
       // Wait for wallet address to be available
       setTimeout(async () => {
-        const address = localStorage.getItem('walletAddress');
+        const address = walletAddress || localStorage.getItem('walletAddress');
+        console.log('📍 Connected wallet address:', address);
+        
         if (address) {
           const success = await loginWithWallet(address);
           if (success) {
@@ -82,11 +109,12 @@ const Login: React.FC = () => {
             });
           }
         }
-      }, 100);
-    } catch (error) {
+      }, 2000);
+    } catch (error: any) {
+      console.error('MetaMask login error:', error);
       toast({
         title: 'Connection Failed',
-        description: 'Failed to connect MetaMask. Please try again.',
+        description: error.message || 'Failed to connect MetaMask. Please try again.',
         variant: 'destructive',
       });
     }

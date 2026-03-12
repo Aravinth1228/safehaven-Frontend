@@ -188,16 +188,37 @@ const SignUp: React.FC = () => {
       console.log('Wallet:', walletAddress);
 
       // CRITICAL: Re-check wallet connection and refresh signer
-      // This fixes the issue where wallet appears connected but signer is lost
-      const { getSigner, getConnectedAddress } = await import('../lib/walletConnect');
+      const { getSigner, getConnectedAddress, ensureAppKit, getProvider, getCachedProvider, getIsProviderReady } = await import('../lib/walletConnect');
 
-      // NOTE: Don't use isConnected() - it returns false on mobile (AppKit bug)
-      // Instead, check if we have an address
-      const currentAddress = await getConnectedAddress();
+      // Wait for AppKit to be fully initialized
+      console.log('⏳ Waiting for AppKit initialization...');
+      await ensureAppKit();
+      console.log('✅ AppKit initialized');
+
+      // Wait a moment for provider to be available
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Get current address - check both cached and from AppKit
+      let currentAddress: string | null = null;
+
+      try {
+        // Try getting provider first (this ensures wallet is connected)
+        const provider = await getProvider();
+        console.log('✅ Got provider, now getting address...');
+        currentAddress = await getConnectedAddress();
+      } catch (providerErr) {
+        console.warn('⚠️ Provider not available:', providerErr);
+      }
+
+      if (!currentAddress) {
+        currentAddress = walletAddress;
+      }
 
       console.log('🔍 Connection check:', {
         currentAddress,
-        contextAddress: walletAddress
+        contextAddress: walletAddress,
+        hasProvider: !!getCachedProvider(),
+        isProviderReady: getIsProviderReady()
       });
 
       if (!currentAddress) {
@@ -205,18 +226,27 @@ const SignUp: React.FC = () => {
       }
 
       // Verify addresses match
-      if (currentAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+      if (walletAddress && currentAddress.toLowerCase() !== walletAddress.toLowerCase()) {
         console.warn('⚠️ Address mismatch! Current:', currentAddress, 'Expected:', walletAddress);
         throw new Error('Wallet address changed. Please reconnect.');
       }
 
-      // Try to get fresh signer
+      // Get signer - now with injected provider fallback (bypasses WalletConnect RPC 503 errors)
+      let freshSigner;
       try {
-        const freshSigner = await getSigner();
-        console.log('✅ Got fresh signer:', await freshSigner.getAddress());
+        freshSigner = await getSigner();
+        console.log('✅ Got signer:', await freshSigner.getAddress());
       } catch (signerErr: any) {
-        console.error('❌ Failed to get signer:', signerErr.message);
-        throw new Error('Failed to access wallet. Please reconnect and try again.');
+        console.error('❌ Could not get signer:', signerErr);
+        throw new Error(
+          'Failed to access wallet. On mobile, open this site inside the MetaMask app browser for best results.'
+        );
+      }
+
+      // Mobile delay - let WalletConnect modal close before signature request
+      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        console.log('📱 Mobile detected, waiting 1.5s for WalletConnect modal...');
+        await new Promise(resolve => setTimeout(resolve, 1500));
       }
 
       // Step 1: Check if already registered on blockchain
@@ -326,6 +356,13 @@ const SignUp: React.FC = () => {
         errorMessage = 'You rejected the signature. Please sign to complete registration.';
       } else if (error.message?.includes('Failed to fetch')) {
         errorMessage = 'Cannot connect to backend server. Please ensure the server is running.';
+      } else if (error.message?.includes('Failed to access wallet')) {
+        // Mobile-specific guidance for WalletConnect RPC issues
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+          errorMessage = 'On mobile, open this site inside the MetaMask app browser for best results. ' +
+            'Tap the 🌐 browser icon in MetaMask and navigate to this URL. ' +
+            'This bypasses WalletConnect relay issues.';
+        }
       }
 
       toast({

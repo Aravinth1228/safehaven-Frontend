@@ -9,9 +9,9 @@ import {
   onConnectionChange,
   disconnect as walletConnectDisconnect,
   openModal,
-  appKit,
-  cachedProvider,
-  isProviderReady,
+  ensureAppKit,
+  getCachedProvider,
+  getIsProviderReady,
 } from '../lib/walletConnect';
 import {
   isMobile as checkIsMobile,
@@ -61,23 +61,33 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setIsMetaMaskInstalled(checkIsMetaMaskInstalled());
 
     // Check if already connected via AppKit (using cached values)
-    const existingAddress = appKit.getAddress();
-    console.log('🔍 Checking existing connection:', existingAddress, 'Provider ready:', isProviderReady);
-
-    if (existingAddress && isProviderReady && cachedProvider) {
-      console.log('✅ Restoring AppKit session with cached provider:', existingAddress);
-      setWalletAddress(existingAddress);
+    // Use async approach to ensure AppKit is initialized
+    const checkAppKitConnection = async () => {
       try {
-        const browserProvider = new ethers.BrowserProvider(cachedProvider);
-        browserProvider.getSigner().then(setSigner).catch(console.error);
-        setProvider(browserProvider);
+        await ensureAppKit();
+        const existingAddress = await getConnectedAddress();
+        console.log('🔍 Checking existing connection:', existingAddress, 'Provider ready:', getIsProviderReady());
+
+        if (existingAddress && getIsProviderReady() && getCachedProvider()) {
+          console.log('✅ Restoring AppKit session with cached provider:', existingAddress);
+          setWalletAddress(existingAddress);
+          try {
+            const browserProvider = new ethers.BrowserProvider(getCachedProvider());
+            browserProvider.getSigner().then(setSigner).catch(console.error);
+            setProvider(browserProvider);
+          } catch (err) {
+            console.error('Could not restore signer:', err);
+          }
+        }
       } catch (err) {
-        console.error('Could not restore signer:', err);
+        console.warn('⚠️ AppKit not initialized yet:', err);
       }
-    }
+    };
+
+    checkAppKitConnection();
 
     // Restore MetaMask extension session (desktop only)
-    if (!checkIsMobile() && checkIsMetaMaskInstalled() && !existingAddress) {
+    if (!checkIsMobile() && checkIsMetaMaskInstalled()) {
       window.ethereum
         ?.request({ method: 'eth_accounts' })
         .then((accounts) => {
@@ -98,12 +108,12 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.log('🔔 AppKit state changed:', connected, address);
       if (connected && address) {
         setWalletAddress(address);
-        
+
         // Wait for provider to be cached by the global subscription
         setTimeout(async () => {
-          if (isProviderReady && cachedProvider) {
+          if (getIsProviderReady() && getCachedProvider()) {
             try {
-              const browserProvider = new ethers.BrowserProvider(cachedProvider);
+              const browserProvider = new ethers.BrowserProvider(getCachedProvider());
               const signer = await browserProvider.getSigner();
               setSigner(signer);
               setProvider(browserProvider);
@@ -115,9 +125,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             console.warn('⚠️ Provider not ready after connection, waiting...');
             // Wait a bit more and try again
             setTimeout(async () => {
-              if (isProviderReady && cachedProvider) {
+              if (getIsProviderReady() && getCachedProvider()) {
                 try {
-                  const browserProvider = new ethers.BrowserProvider(cachedProvider);
+                  const browserProvider = new ethers.BrowserProvider(getCachedProvider());
                   const signer = await browserProvider.getSigner();
                   setSigner(signer);
                   setProvider(browserProvider);
@@ -164,7 +174,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       // Open AppKit modal - connection is handled by AppKit
       console.log('📍 Opening AppKit modal...');
-      openModal();
+      await openModal();
 
       // Wait for connection (address appears)
       let attempts = 0;
@@ -172,7 +182,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       while (attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
-        const address = appKit.getAddress();
+        const address = await getConnectedAddress();
 
         if (attempts < 10 || attempts % 10 === 0) {
           console.log(`🔍 Waiting for connection... (${attempts + 1}/${maxAttempts}) Address: ${address}`);
@@ -188,7 +198,7 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       }
 
       // Final check
-      const finalAddress = appKit.getAddress();
+      const finalAddress = await getConnectedAddress();
       if (!finalAddress) {
         console.warn('⚠️ Connection timed out');
         toast.error('Connection Timeout', {
@@ -196,10 +206,10 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         });
       } else {
         // Check if provider was cached
-        if (isProviderReady && cachedProvider) {
+        if (getIsProviderReady() && getCachedProvider()) {
           console.log('✅ Provider ready from cache');
           try {
-            const browserProvider = new ethers.BrowserProvider(cachedProvider);
+            const browserProvider = new ethers.BrowserProvider(getCachedProvider());
             const signer = await browserProvider.getSigner();
             setSigner(signer);
             setProvider(browserProvider);
@@ -211,9 +221,9 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           console.warn('⚠️ Provider not ready yet, waiting...');
           // Wait a bit more for provider caching
           setTimeout(async () => {
-            if (isProviderReady && cachedProvider) {
+            if (getIsProviderReady() && getCachedProvider()) {
               try {
-                const browserProvider = new ethers.BrowserProvider(cachedProvider);
+                const browserProvider = new ethers.BrowserProvider(getCachedProvider());
                 const signer = await browserProvider.getSigner();
                 setSigner(signer);
                 setProvider(browserProvider);

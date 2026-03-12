@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { appKit } from '@/lib/walletConnect';
+import { ensureAppKit } from '@/lib/walletConnect';
 
 /**
  * AddSepoliaButton Component
@@ -19,6 +19,7 @@ const AddSepoliaButton: React.FC = () => {
       const chainId = 11155111;
 
       // Use AppKit to switch/add network (works on mobile too!)
+      const appKit = await ensureAppKit();
       await appKit.switchNetwork(11155111);
 
       toast({
@@ -56,6 +57,7 @@ const AddSepoliaButton: React.FC = () => {
       const chainId = 11155111;
 
       // Use AppKit to switch network
+      const appKit = await ensureAppKit();
       await appKit.switchNetwork(11155111);
 
       toast({

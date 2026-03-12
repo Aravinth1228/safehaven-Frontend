@@ -61,9 +61,9 @@ const Login: React.FC = () => {
 
   const handleMetaMaskLogin = async () => {
     try {
-      console.log('🔗 Mobile MetaMask login initiated...');
+      console.log('🔗 MetaMask login initiated...');
       
-      // Check if already in MetaMask browser (window.ethereum exists)
+      // Check if already in MetaMask browser
       const isInMetaMaskBrowser = typeof window !== 'undefined' && window.ethereum?.isMetaMask;
       
       if (isInMetaMaskBrowser) {
@@ -95,31 +95,8 @@ const Login: React.FC = () => {
         return;
       }
       
-      // On mobile regular browser (Chrome, Safari, etc.) - Deep link to MetaMask
-      if (isMobileDevice) {
-        console.log('📱 Not in MetaMask browser, deep linking...');
-        
-        // Use MetaMask's universal link format
-        const currentUrl = encodeURIComponent(`${window.location.origin}${window.location.pathname}${window.location.search}`);
-        const metaMaskDeepLink = `https://metamask.app.link/dapp/${currentUrl}`;
-        
-        // Show toast
-        toast({
-          title: 'Opening MetaMask...',
-          description: 'Redirecting to MetaMask mobile app',
-          duration: 3000,
-        });
-        
-        // Wait a moment then redirect
-        setTimeout(() => {
-          console.log('🔗 Redirecting to:', metaMaskDeepLink);
-          window.location.href = metaMaskDeepLink;
-        }, 500);
-        return;
-      }
-      
-      // Desktop - use WalletConnect
-      console.log('🖥️ Desktop - using WalletConnect');
+      // On desktop or not in MetaMask - use WalletConnect
+      console.log('🖥️ Using WalletConnect');
       await connectWallet();
 
       setTimeout(async () => {
@@ -240,21 +217,6 @@ const Login: React.FC = () => {
           ) : (
             /* MetaMask Login */
             <div className="space-y-5">
-              {/* Mobile Info Banner */}
-              {isMobileDevice && (
-                <div className="p-4 rounded-xl bg-blue-50 border border-blue-200">
-                  <p className="text-sm text-blue-800 font-medium mb-2">
-                    📱 For best experience on mobile:
-                  </p>
-                  <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
-                    <li>Open MetaMask app</li>
-                    <li>Tap the 🌐 Browser icon</li>
-                    <li>Navigate to this site</li>
-                    <li>Connect & Login</li>
-                  </ol>
-                </div>
-              )}
-              
               <div className="p-4 rounded-xl bg-muted/30 border border-border text-center">
                 <Wallet className="w-12 h-12 text-primary mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground mb-4">
@@ -273,7 +235,7 @@ const Login: React.FC = () => {
                 onClick={handleMetaMaskLogin}
                 disabled={isConnecting}
               >
-                {isConnecting ? 'Connecting...' : (isMobileDevice ? 'Open in MetaMask App' : 'Connect MetaMask & Login')}
+                {isConnecting ? 'Connecting...' : 'Connect MetaMask & Login'}
                 <Wallet className="w-5 h-5 ml-2" />
               </Button>
 

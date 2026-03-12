@@ -90,20 +90,20 @@ export default function MobileMetaMaskGate({ children }: MobileMetaMaskGateProps
     <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
       <div className="text-center max-w-md">
         {/* MetaMask Fox Icon */}
-        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-500/50 text-5xl">
+        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center mx-auto mb-6 shadow-lg shadow-primary/50 text-5xl">
           🦊
         </div>
-        
-        <h1 className="text-2xl font-bold mb-3 bg-gradient-to-r from-orange-500 to-yellow-500 bg-clip-text text-transparent">
+
+        <h1 className="text-2xl font-bold mb-3 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
           Opening in MetaMask
         </h1>
-        
+
         <p className="text-gray-400 text-sm mb-8 max-w-xs mx-auto leading-relaxed">
           Redirecting you to the MetaMask app for the best mobile experience.
         </p>
 
         {/* Countdown Spinner */}
-        <div className="w-16 h-16 rounded-full border-4 border-gray-700 border-t-orange-500 flex items-center justify-center mx-auto mb-6 animate-spin text-orange-500 font-bold text-xl">
+        <div className="w-16 h-16 rounded-full border-4 border-gray-700 border-t-primary flex items-center justify-center mx-auto mb-6 animate-spin text-primary font-bold text-xl">
           {countdown}
         </div>
 
@@ -112,7 +112,7 @@ export default function MobileMetaMaskGate({ children }: MobileMetaMaskGateProps
           onClick={() => {
             window.location.href = getMetaMaskDeepLink();
           }}
-          className="w-full max-w-xs bg-gradient-to-r from-orange-500 to-orange-600 text-white py-3 px-6 rounded-xl font-semibold shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all active:scale-95 mb-4"
+          className="w-full max-w-xs bg-gradient-to-r from-primary to-secondary text-white py-3 px-6 rounded-xl font-semibold shadow-lg shadow-primary/30 hover:shadow-primary/50 transition-all active:scale-95 mb-4"
         >
           🦊 Open in MetaMask Now
         </button>

@@ -462,7 +462,7 @@ const Dashboard: React.FC = () => {
               ) : locationAccuracy && locationAccuracy > MAX_ACCEPTABLE_ACCURACY ? (
                 <>
                   <p className="text-sm font-semibold text-yellow-400">📡 Waiting for GPS lock… (±{Math.round(locationAccuracy / 1000)}km signal)</p>
-                  <p className="text-xs text-muted-foreground">Phone-ல் use பண்ணுங்க — outdoors போனா 5-10s-ல் lock ஆகும்</p>
+                  <p className="text-xs text-muted-foreground">Use on mobile and go outdoors for better GPS accuracy</p>
                 </>
               ) : (
                 <>

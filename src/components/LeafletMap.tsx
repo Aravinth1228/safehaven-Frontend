@@ -497,6 +497,7 @@ const LeafletMap: React.FC<Props> = ({
                   key={key}
                   className={tileLayer === key ? 'active' : ''}
                   onClick={() => setTileLayer(key)}
+                  style={{ color: tileLayer === key ? '#fff' : '#000' }}
                 >
                   {val.label}
                 </button>

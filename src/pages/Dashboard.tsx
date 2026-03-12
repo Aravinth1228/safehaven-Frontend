@@ -80,6 +80,7 @@ const Dashboard: React.FC = () => {
   const [lastLocationUpdate, setLastLocationUpdate] = useState<Date | null>(null);
   const [isOnline, setIsOnline]               = useState(navigator.onLine);
   const [isTracking, setIsTracking]           = useState(true);
+  const [addressLoading, setAddressLoading]   = useState(false);
 
   // GPS accuracy averaging — collect 3 readings, pick best
   const gpsReadingsRef = useRef<GeolocationPosition[]>([]);
@@ -402,8 +403,17 @@ const Dashboard: React.FC = () => {
   };
 
   const markAllNotificationsAsRead = async () => {
-    await Promise.all(notifications.filter(n => !n.read).map(n => api.notifications.markRead(n.id)));
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    try {
+      // Mark all unread notifications as read in backend
+      const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+      await Promise.all(unreadIds.map(id => api.notifications.markRead(id)));
+      // Update local state
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      toast({ title: '✅ All Read', description: 'All notifications marked as read.' });
+    } catch (error) {
+      console.error('Failed to mark all as read:', error);
+      toast({ title: 'Error', description: 'Failed to mark notifications as read.', variant: 'destructive' });
+    }
   };
 
   const handleStatusChange = async (newStatus: 'safe' | 'alert' | 'danger') => {
@@ -431,6 +441,39 @@ const Dashboard: React.FC = () => {
     if (s < 60) return `${s}s ago`;
     return `${Math.floor(s / 60)}m ago`;
   };
+
+  // ── Reverse Geocoding - Get address from coordinates ───────────────────────
+  const fetchAddressFromCoordinates = useCallback(async (lat: number, lng: number) => {
+    if (addressLoading) return;
+    setAddressLoading(true);
+    try {
+      // Using OpenStreetMap Nominatim API for reverse geocoding
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+      const data = await response.json();
+      
+      if (data && data.address) {
+        setCurrentPlace({
+          address: data.display_name || '',
+          city: data.address.city || data.address.town || data.address.village || data.address.county || '',
+          state: data.address.state || '',
+          country: data.address.country || '',
+          lat,
+          lng,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch address:', error);
+    } finally {
+      setAddressLoading(false);
+    }
+  }, [addressLoading]);
+
+  // Fetch address when location changes
+  useEffect(() => {
+    if (location?.lat && location?.lng) {
+      fetchAddressFromCoordinates(location.lat, location.lng);
+    }
+  }, [location?.lat, location?.lng, fetchAddressFromCoordinates]);
 
   // No blocking loading screen — dashboard opens immediately
   const MAX_ACCEPTABLE_ACCURACY = 500; // meters — same as GPS tracking logic
@@ -715,35 +758,52 @@ const Dashboard: React.FC = () => {
 
           <div className="glass-card rounded-2xl p-6">
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-warning/20 flex items-center justify-center">
-                <Activity className="w-6 h-6 text-warning" />
+              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                <User className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg">Quick Actions</h3>
-                <p className="text-sm text-muted-foreground">Emergency tools</p>
+                <h3 className="font-semibold text-lg">User Details</h3>
+                <p className="text-sm text-muted-foreground">Your profile information</p>
               </div>
             </div>
             <div className="space-y-3">
-              <Button className="w-full justify-start gap-2" variant="outline">
-                <Shield className="w-4 h-4" /> Emergency Contacts
-              </Button>
-              <Button className="w-full justify-start gap-2" variant="outline"
-                disabled={!location}
-                onClick={() => {
-                  if (!location) return;
-                  const url = `https://maps.google.com/?q=${location.lat},${location.lng}`;
-                  if (navigator.share) {
-                    navigator.share({ title: 'My Location', url });
-                  } else {
-                    navigator.clipboard.writeText(url);
-                    toast({ title: '📋 Copied!', description: 'Location link copied to clipboard.' });
-                  }
-                }}>
-                <MapPin className="w-4 h-4" /> Share My Location
-              </Button>
-              <Button className="w-full justify-start gap-2" variant="outline">
-                <Bell className="w-4 h-4" /> Request Assistance
-              </Button>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                <span className="text-sm text-muted-foreground">👤 Username</span>
+                <span className="font-semibold text-sm text-foreground">{user?.username || 'N/A'}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                <span className="text-sm text-muted-foreground">📞 Phone Number</span>
+                <span className="font-semibold text-sm text-foreground">{user?.phone || 'Not provided'}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                <span className="text-sm text-muted-foreground">📍 City</span>
+                <span className="font-semibold text-sm text-foreground">
+                  {addressLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : currentPlace?.city ? (
+                    currentPlace.city
+                  ) : (
+                    'Loading...'
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                <span className="text-sm text-muted-foreground">📮 Pincode</span>
+                <span className="font-semibold text-sm text-foreground">
+                  {addressLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : currentPlace?.address ? (
+                    // Extract pincode from address (Indian format)
+                    currentPlace.address.match(/\b\d{6}\b/)?.[0] || 'Not available'
+                  ) : (
+                    'Loading...'
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+                <span className="text-sm text-muted-foreground">🌍 Country</span>
+                <span className="font-semibold text-sm text-foreground">{currentPlace?.country || 'N/A'}</span>
+              </div>
             </div>
           </div>
         </div>

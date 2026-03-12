@@ -172,7 +172,33 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     try {
       console.log('🔗 Connecting wallet...');
 
-      // Open AppKit modal - connection is handled by AppKit
+      // ✅ If window.ethereum is available (MetaMask in-app browser / desktop extension)
+      // Skip AppKit modal entirely — connect directly
+      if (typeof window !== 'undefined' && window.ethereum) {
+        console.log('📍 Using injected window.ethereum directly');
+        try {
+          const accounts = await window.ethereum.request({ 
+            method: 'eth_requestAccounts' 
+          }) as string[];
+          
+          if (accounts && accounts.length > 0) {
+            const prov = new ethers.BrowserProvider(window.ethereum as any);
+            const signerInstance = await prov.getSigner();
+            setWalletAddress(accounts[0]);
+            setSigner(signerInstance);
+            setProvider(prov);
+            console.log('✅ Connected via window.ethereum:', accounts[0]);
+            return; // Done — no need for AppKit
+          }
+        } catch (err: any) {
+          if (err.code === 4001) {
+            throw new Error('You rejected the wallet connection. Please approve to continue.');
+          }
+          console.warn('⚠️ window.ethereum failed, falling back to AppKit:', err);
+        }
+      }
+
+      // Fallback: Open AppKit modal for WalletConnect
       console.log('📍 Opening AppKit modal...');
       await openModal();
 

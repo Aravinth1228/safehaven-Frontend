@@ -157,14 +157,19 @@ setupAccountSubscription();
 /**
  * Get Provider - with fallback to injected provider (window.ethereum)
  * WalletConnect RPC can fail with 503 on mobile, so we try injected first
+ * Uses eth_requestAccounts to trigger MetaMask approval popup
  */
 export async function getProvider() {
   // 1. Injected provider first (avoids WalletConnect RPC entirely)
   if (typeof window !== 'undefined' && window.ethereum) {
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_accounts' }) as string[];
-      if (accounts.length > 0) {
-        console.log('✅ Using injected window.ethereum as provider');
+      // REQUEST accounts (triggers MetaMask approval popup if needed)
+      const accounts = await window.ethereum.request({ 
+        method: 'eth_requestAccounts' 
+      }) as string[];
+      
+      if (accounts && accounts.length > 0) {
+        console.log('✅ Using injected window.ethereum as provider:', accounts[0]);
         return window.ethereum;
       }
     } catch (err) {
@@ -198,35 +203,44 @@ export async function getProvider() {
 /**
  * Get Signer - with fallback to injected provider (window.ethereum)
  * WalletConnect RPC can fail with 503 on mobile, so we try injected first
+ * Uses eth_requestAccounts to trigger MetaMask approval popup
  */
 export async function getSigner() {
-  // 1. Try injected window.ethereum first (MetaMask mobile browser / desktop extension)
+  // 1. Try injected window.ethereum (MetaMask in-app browser / desktop extension)
   if (typeof window !== 'undefined' && window.ethereum) {
     try {
-      const browserProvider = new ethers.BrowserProvider(window.ethereum);
-      const accounts = await browserProvider.listAccounts();
-      if (accounts.length > 0) {
-        console.log('✅ Got signer from injected window.ethereum');
+      // REQUEST accounts (triggers MetaMask approval popup if needed)
+      const accounts = await window.ethereum.request({ 
+        method: 'eth_requestAccounts' 
+      }) as string[];
+      
+      if (accounts && accounts.length > 0) {
+        console.log('✅ Got signer from window.ethereum:', accounts[0]);
+        const browserProvider = new ethers.BrowserProvider(window.ethereum as any);
         return await browserProvider.getSigner();
       }
-    } catch (err) {
-      console.warn('⚠️ window.ethereum signer failed:', err);
+    } catch (err: any) {
+      // User rejected or not in MetaMask browser
+      if (err.code === 4001) {
+        throw new Error('You rejected the wallet connection. Please approve to continue.');
+      }
+      console.warn('⚠️ window.ethereum failed:', err);
     }
   }
 
-  // 2. Try cached provider (WalletConnect)
+  // 2. Try cached WalletConnect provider
   if (walletState.cachedProvider && walletState.isProviderReady) {
     try {
       const browserProvider = new ethers.BrowserProvider(walletState.cachedProvider);
       const signer = await browserProvider.getSigner();
-      console.log('✅ Got signer from cached WalletConnect provider');
+      console.log('✅ Got signer from cached provider');
       return signer;
     } catch (err) {
       console.warn('⚠️ Cached provider signer failed:', err);
     }
   }
 
-  // 3. Try fetching provider fresh from AppKit
+  // 3. Try fresh AppKit provider
   try {
     const appKitInstance = await ensureAppKit();
     const provider = await appKitInstance.getProvider();
@@ -234,9 +248,8 @@ export async function getSigner() {
       walletState.cachedProvider = provider;
       walletState.isProviderReady = true;
       const browserProvider = new ethers.BrowserProvider(provider);
-      const signer = await browserProvider.getSigner();
       console.log('✅ Got signer from fresh AppKit provider');
-      return signer;
+      return await browserProvider.getSigner();
     }
   } catch (err) {
     console.warn('⚠️ AppKit fresh provider failed:', err);

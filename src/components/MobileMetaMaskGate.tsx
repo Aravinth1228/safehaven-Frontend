@@ -5,82 +5,139 @@ interface MobileMetaMaskGateProps {
 }
 
 /**
+ * Check if user is on mobile device
+ */
+function isMobile(): boolean {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+/**
+ * Check if already inside MetaMask's in-app browser
+ * This is ONLY true when MetaMask injects window.ethereum with isMetaMask flag
+ * AND the user agent contains MetaMaskMobile
+ */
+function isAlreadyInMetaMaskBrowser(): boolean {
+  const hasMetaMaskUA = /MetaMaskMobile/i.test(navigator.userAgent);
+  const hasEthereum = !!(window as any)?.ethereum?.isMetaMask;
+  
+  // Must have BOTH - ethereum injected AND MetaMask in UA
+  return hasMetaMaskUA && hasEthereum;
+}
+
+/**
+ * Get MetaMask deep link URL
+ */
+function getMetaMaskDeepLink(): string {
+  const url = window.location.href.replace(/^https?:\/\//, '');
+  return `https://metamask.app.link/dapp/${url}`;
+}
+
+/**
  * MobileMetaMaskGate - Automatically redirects mobile users to MetaMask in-app browser
  * 
- * How it works:
- * 1. Detects if user is on mobile (iPhone/Android)
- * 2. Checks if NOT already in MetaMask browser (no window.ethereum)
- * 3. Redirects to metamask.app.link which opens MetaMask app
- * 4. MetaMask loads your site in its built-in browser with window.ethereum injected
+ * Flow:
+ * 1. Desktop → render normally
+ * 2. Mobile + Already in MetaMask browser → render normally
+ * 3. Mobile + NOT in MetaMask browser → redirect to metamask.app.link
  */
 export default function MobileMetaMaskGate({ children }: MobileMetaMaskGateProps) {
-  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [status, setStatus] = useState<'checking' | 'redirect' | 'ok'>('checking');
+  const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
-    // Check if already in MetaMask browser
-    const isInMetaMaskBrowser = typeof window !== 'undefined' && 
-      window.ethereum?.isMetaMask === true;
-
-    // Check if on mobile device
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-    // If on mobile AND not in MetaMask browser → redirect
-    if (isMobile && !isInMetaMaskBrowser && !isRedirecting) {
-      console.log('📱 Mobile detected, redirecting to MetaMask app...');
-      setIsRedirecting(true);
-
-      // Build the deep link URL
-      const currentUrl = encodeURIComponent(
-        `${window.location.origin}${window.location.pathname}${window.location.search}`
-      );
-      const metaMaskDeepLink = `https://metamask.app.link/dapp/${currentUrl}`;
-
-      // Show a brief message then redirect
-      const timer = setTimeout(() => {
-        console.log('🔗 Redirecting to:', metaMaskDeepLink);
-        window.location.href = metaMaskDeepLink;
-      }, 100); // Small delay to ensure state is set
-
-      return () => clearTimeout(timer);
+    // Not mobile → skip entirely
+    if (!isMobile()) {
+      console.log('✅ Desktop detected, rendering normally');
+      setStatus('ok');
+      return;
     }
 
-    // If in MetaMask browser or desktop → render normally
-    console.log('✅ Rendering normally (MetaMask browser or desktop)');
-  }, [isRedirecting]);
+    // Already inside MetaMask browser → skip
+    if (isAlreadyInMetaMaskBrowser()) {
+      console.log('✅ Already in MetaMask browser, rendering normally');
+      setStatus('ok');
+      return;
+    }
 
-  // Show redirecting screen
-  if (isRedirecting) {
-    return (
-      <div className="fixed inset-0 bg-gradient-to-br from-primary/10 via-background to-primary/5 flex items-center justify-center p-4">
-        <div className="text-center max-w-md">
-          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6 animate-pulse">
-            <svg className="w-10 h-10 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-          </div>
-          
-          <h2 className="text-2xl font-bold mb-3">
-            Opening in MetaMask...
-          </h2>
-          
-          <p className="text-muted-foreground mb-6">
-            Redirecting you to the MetaMask app for the best mobile experience.
-          </p>
+    // Mobile but NOT in MetaMask browser → redirect
+    console.log('📱 Mobile detected, NOT in MetaMask browser → redirecting');
+    setStatus('redirect');
 
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
-          </div>
+    // Countdown then redirect
+    let count = 3;
+    const timer = setInterval(() => {
+      count -= 1;
+      setCountdown(count);
+      if (count <= 0) {
+        clearInterval(timer);
+        const deepLink = getMetaMaskDeepLink();
+        console.log('🔗 Redirecting to MetaMask:', deepLink);
+        window.location.href = deepLink;
+      }
+    }, 1000);
 
-          <p className="text-xs text-muted-foreground mt-6">
-            If MetaMask doesn't open automatically, make sure you have the MetaMask app installed.
-          </p>
+    return () => clearInterval(timer);
+  }, []);
+
+  // Still checking → show nothing (avoid flash)
+  if (status === 'checking') return null;
+
+  // Already in MetaMask or desktop → render children
+  if (status === 'ok') return <>{children}</>;
+
+  // Redirect screen
+  return (
+    <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+      <div className="text-center max-w-md">
+        {/* MetaMask Fox Icon */}
+        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-500/50 text-5xl">
+          🦊
         </div>
-      </div>
-    );
-  }
+        
+        <h1 className="text-2xl font-bold mb-3 bg-gradient-to-r from-orange-500 to-yellow-500 bg-clip-text text-transparent">
+          Opening in MetaMask
+        </h1>
+        
+        <p className="text-gray-400 text-sm mb-8 max-w-xs mx-auto leading-relaxed">
+          Redirecting you to the MetaMask app for the best mobile experience.
+        </p>
 
-  // Render children normally (either in MetaMask browser or desktop)
-  return <>{children}</>;
+        {/* Countdown Spinner */}
+        <div className="w-16 h-16 rounded-full border-4 border-gray-700 border-t-orange-500 flex items-center justify-center mx-auto mb-6 animate-spin text-orange-500 font-bold text-xl">
+          {countdown}
+        </div>
+
+        {/* Manual Open Button */}
+        <button
+          onClick={() => {
+            window.location.href = getMetaMaskDeepLink();
+          }}
+          className="w-full max-w-xs bg-gradient-to-r from-orange-500 to-orange-600 text-white py-3 px-6 rounded-xl font-semibold shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all active:scale-95 mb-4"
+        >
+          🦊 Open in MetaMask Now
+        </button>
+
+        {/* Install Link */}
+        <a
+          href="https://metamask.io/download/"
+          target="_blank"
+          rel="noreferrer"
+          className="text-gray-500 text-xs underline hover:text-gray-400"
+        >
+          Don't have MetaMask? Install it →
+        </a>
+
+        {/* Spinner Animation */}
+        <style>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .animate-spin {
+            animation: spin 1s linear infinite;
+          }
+        `}</style>
+      </div>
+    </div>
+  );
 }

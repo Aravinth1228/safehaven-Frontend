@@ -187,6 +187,22 @@ const SignUp: React.FC = () => {
       console.log('🚀 Starting registration...');
       console.log('Wallet:', walletAddress);
 
+      // 🔍 DEBUG - Log wallet state
+      console.log('=== WALLET DEBUG ===');
+      console.log('window.ethereum exists:', typeof window !== 'undefined' && !!window.ethereum);
+      console.log('window.ethereum.isMetaMask:', typeof window !== 'undefined' && window.ethereum?.isMetaMask);
+      console.log('walletAddress from context:', walletAddress);
+      
+      if (typeof window !== 'undefined' && window.ethereum) {
+        try {
+          const ethAccounts = await window.ethereum.request({ method: 'eth_accounts' });
+          console.log('eth_accounts (already approved):', ethAccounts);
+        } catch (e: any) {
+          console.log('eth_accounts error:', e.message);
+        }
+      }
+      console.log('===================');
+
       // CRITICAL: Re-check wallet connection and refresh signer
       const { getSigner, getConnectedAddress, ensureAppKit, getProvider, getCachedProvider, getIsProviderReady } = await import('../lib/walletConnect');
 
@@ -238,8 +254,12 @@ const SignUp: React.FC = () => {
         console.log('✅ Got signer:', await freshSigner.getAddress());
       } catch (signerErr: any) {
         console.error('❌ Could not get signer:', signerErr);
+        // Check if window.ethereum is available for better error message
+        const hasInjectedProvider = typeof window !== 'undefined' && !!window.ethereum;
         throw new Error(
-          'Failed to access wallet. On mobile, open this site inside the MetaMask app browser for best results.'
+          hasInjectedProvider
+            ? 'Wallet found but could not sign. Please disconnect and reconnect your wallet, then try again.'
+            : 'Failed to access wallet. On mobile, open this site inside the MetaMask app browser for best results.'
         );
       }
 
@@ -356,12 +376,17 @@ const SignUp: React.FC = () => {
         errorMessage = 'You rejected the signature. Please sign to complete registration.';
       } else if (error.message?.includes('Failed to fetch')) {
         errorMessage = 'Cannot connect to backend server. Please ensure the server is running.';
-      } else if (error.message?.includes('Failed to access wallet')) {
-        // Mobile-specific guidance for WalletConnect RPC issues
-        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-          errorMessage = 'On mobile, open this site inside the MetaMask app browser for best results. ' +
-            'Tap the 🌐 browser icon in MetaMask and navigate to this URL. ' +
-            'This bypasses WalletConnect relay issues.';
+      } else if (error.code === 'NETWORK_ERROR' || error.message?.includes('network changed') || error.message?.includes('changed')) {
+        errorMessage = 'Network switched during signing. Please make sure you are on Sepolia Testnet and try again.';
+      } else if (error.message?.includes('Failed to access wallet') || error.message?.includes('Wallet found but could not sign')) {
+        // Context-aware error message based on whether wallet is available
+        const hasInjectedProvider = typeof window !== 'undefined' && !!window.ethereum;
+        if (hasInjectedProvider) {
+          errorMessage = 'Wallet found but could not sign. Please disconnect and reconnect your wallet, then try again. ' +
+            'Make sure you are on the correct network (Sepolia Testnet).';
+        } else {
+          errorMessage = 'No wallet detected. On mobile, open this site inside the MetaMask app browser for best results. ' +
+            'Tap the 🌐 browser icon in MetaMask and navigate to this URL.';
         }
       }
 

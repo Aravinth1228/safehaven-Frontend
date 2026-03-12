@@ -200,61 +200,162 @@ export async function getProvider() {
   throw new Error('Wallet not connected yet. Please connect wallet first.');
 }
 
+const REQUIRED_CHAIN_ID = 11155111; // Sepolia
+
+/**
+ * Ensure wallet is on Sepolia — switches automatically if not
+ */
+async function ensureCorrectNetwork(provider: any): Promise<void> {
+  try {
+    const chainId = await provider.request({ method: 'eth_chainId' }) as string;
+    const currentChain = parseInt(chainId, 16);
+    console.log('🔗 Current chainId:', currentChain);
+
+    if (currentChain !== REQUIRED_CHAIN_ID) {
+      console.log(`⚠️ Wrong network (${currentChain}), switching to Sepolia...`);
+      try {
+        await provider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0xaa36a7' }], // Sepolia hex
+        });
+        console.log('✅ Switched to Sepolia');
+        // Wait for switch to complete
+        await new Promise(r => setTimeout(r, 1000));
+      } catch (switchErr: any) {
+        // Chain not added yet — add it
+        if (switchErr.code === 4902) {
+          await provider.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0xaa36a7',
+              chainName: 'Sepolia Testnet',
+              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://rpc.sepolia.org', 'https://sepolia.infura.io/v3/'],
+              blockExplorerUrls: ['https://sepolia.etherscan.io'],
+            }],
+          });
+          await new Promise(r => setTimeout(r, 1000));
+        } else {
+          throw switchErr;
+        }
+      }
+    } else {
+      console.log('✅ Already on Sepolia');
+    }
+  } catch (err: any) {
+    // If we can't check network, log but don't block
+    console.warn('⚠️ Could not verify network:', err.message);
+  }
+}
+
 /**
  * Get Signer - with fallback to injected provider (window.ethereum)
  * WalletConnect RPC can fail with 503 on mobile, so we try injected first
  * Uses eth_requestAccounts to trigger MetaMask approval popup
+ * Ensures correct network (Sepolia) before creating signer
  */
 export async function getSigner() {
-  // 1. Try injected window.ethereum (MetaMask in-app browser / desktop extension)
+  console.log('🔑 getSigner called');
+  console.log('  window.ethereum:', !!window?.ethereum);
+  console.log('  window.ethereum.isMetaMask:', window?.ethereum?.isMetaMask);
+  console.log('  walletState.cachedProvider:', !!walletState.cachedProvider);
+  console.log('  walletState.isProviderReady:', walletState.isProviderReady);
+  console.log('  walletState.cachedAddress:', walletState.cachedAddress);
+
+  // 1. window.ethereum (MetaMask in-app browser / desktop extension)
   if (typeof window !== 'undefined' && window.ethereum) {
     try {
-      // REQUEST accounts (triggers MetaMask approval popup if needed)
+      console.log('  📍 Trying eth_requestAccounts...');
       const accounts = await window.ethereum.request({ 
         method: 'eth_requestAccounts' 
       }) as string[];
+      console.log('  📋 accounts returned:', accounts);
       
       if (accounts && accounts.length > 0) {
-        console.log('✅ Got signer from window.ethereum:', accounts[0]);
+        // ✅ Check and switch network BEFORE creating signer
+        console.log('  🔗 Ensuring correct network (Sepolia)...');
+        await ensureCorrectNetwork(window.ethereum);
+        
         const browserProvider = new ethers.BrowserProvider(window.ethereum as any);
-        return await browserProvider.getSigner();
+        // Verify network after provider creation
+        const network = await browserProvider.getNetwork();
+        console.log('  ✅ Network:', network.chainId.toString());
+        
+        const signer = await browserProvider.getSigner();
+        console.log('✅ Signer from window.ethereum:', accounts[0]);
+        return signer;
+      } else {
+        console.warn('  ⚠️ eth_requestAccounts returned empty array');
       }
     } catch (err: any) {
-      // User rejected or not in MetaMask browser
+      console.warn('  ❌ window.ethereum failed, code:', err.code, 'message:', err.message);
+      
       if (err.code === 4001) {
         throw new Error('You rejected the wallet connection. Please approve to continue.');
       }
-      console.warn('⚠️ window.ethereum failed:', err);
+      
+      // If it's a network error, try switching and retry once
+      if (err.code === 'NETWORK_ERROR' || err.message?.includes('network changed') || err.message?.includes('changed')) {
+        console.warn('  ⚠️ Network changed during signer creation, retrying...');
+        try {
+          await ensureCorrectNetwork(window.ethereum);
+          await new Promise(r => setTimeout(r, 500));
+          const browserProvider = new ethers.BrowserProvider(window.ethereum as any);
+          const signer = await browserProvider.getSigner();
+          console.log('  ✅ Retry succeeded');
+          return signer;
+        } catch (retryErr: any) {
+          console.warn('  ❌ Retry also failed:', retryErr.message);
+        }
+      }
+      // Don't throw here, fall through to other methods
     }
+  } else {
+    console.log('  ℹ️ window.ethereum not available');
   }
 
-  // 2. Try cached WalletConnect provider
+  // 2. Cached WalletConnect provider
   if (walletState.cachedProvider && walletState.isProviderReady) {
     try {
+      console.log('  📍 Trying cached WalletConnect provider...');
+      // Ensure correct network for cached provider too
+      await ensureCorrectNetwork(walletState.cachedProvider);
+      
       const browserProvider = new ethers.BrowserProvider(walletState.cachedProvider);
       const signer = await browserProvider.getSigner();
-      console.log('✅ Got signer from cached provider');
+      console.log('✅ Signer from cached provider');
       return signer;
-    } catch (err) {
-      console.warn('⚠️ Cached provider signer failed:', err);
+    } catch (err: any) {
+      console.warn('  ❌ Cached provider failed:', err.message);
     }
+  } else {
+    console.log('  ℹ️ No cached provider available');
   }
 
   // 3. Try fresh AppKit provider
   try {
+    console.log('  📍 Trying fresh AppKit provider...');
     const appKitInstance = await ensureAppKit();
     const provider = await appKitInstance.getProvider();
+    console.log('  📋 AppKit provider:', !!provider);
+    
     if (provider) {
       walletState.cachedProvider = provider;
       walletState.isProviderReady = true;
+      
+      // Ensure correct network for AppKit provider
+      await ensureCorrectNetwork(provider);
+      
       const browserProvider = new ethers.BrowserProvider(provider);
-      console.log('✅ Got signer from fresh AppKit provider');
-      return await browserProvider.getSigner();
+      const signer = await browserProvider.getSigner();
+      console.log('✅ Signer from AppKit provider');
+      return signer;
     }
-  } catch (err) {
-    console.warn('⚠️ AppKit fresh provider failed:', err);
+  } catch (err: any) {
+    console.warn('  ❌ AppKit provider failed:', err.message);
   }
 
+  console.error('❌ All signer methods failed');
   throw new Error('Failed to access wallet. Please reconnect and try again.');
 }
 

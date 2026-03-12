@@ -22,10 +22,15 @@
 
 **Solution:** Prioritize `window.ethereum` (injected provider) over WalletConnect RPC
 
-### 5. `WebSocket connection to localhost:3000 failed` (HARMLESS - Can Ignore)
+### 5. **`listAccounts() returns []`** (CRITICAL - Why it still failed!)
+**Cause:** `listAccounts()` returns empty array before user approves connection
+
+**Solution:** Use `eth_requestAccounts` which triggers MetaMask approval popup
+
+### 6. `WebSocket connection to localhost:3000 failed` (HARMLESS - Can Ignore)
 **Expected behavior:** AppKit tries local relay first, falls back to cloud
 
-### 6. `<svg> attribute width/height: Unexpected end of attribute` (COSMETIC - Can Ignore)
+### 7. `<svg> attribute width/height: Unexpected end of attribute` (COSMETIC - Can Ignore)
 **Expected:** AppKit UI component rendering issue, doesn't affect functionality
 
 ---
@@ -41,29 +46,41 @@ Your App → WalletConnect Relay (rpc.walletconnect.org) → MetaMask App → Ba
 
 When `rpc.walletconnect.org` returns **503 Service Unavailable**, all signing fails!
 
-### The Solution: Bypass WalletConnect RPC
+### Why `listAccounts()` Failed
 
-If the user opens your site in **MetaMask's in-app browser**, `window.ethereum` is injected directly:
-```
-Your App → window.ethereum (direct) → MetaMask → Done! (No relay!)
+Even when using `window.ethereum` in MetaMask's in-app browser:
+```typescript
+const accounts = await browserProvider.listAccounts(); // Returns [] before approval!
 ```
 
-This completely bypasses WalletConnect's broken relay!
+**Problem:** `listAccounts()` only returns already-approved accounts. On first connection, it returns `[]`, causing the code to fall through to WalletConnect (which hits 503).
+
+### The Solution: `eth_requestAccounts`
+
+```typescript
+const accounts = await window.ethereum.request({ 
+  method: 'eth_requestAccounts'  // Triggers approval popup!
+});
+```
+
+**This triggers the MetaMask approval popup** and waits for user consent. Once approved, it returns the account address.
 
 ---
 
 ## Key Changes
 
-### Provider Priority (NEW - Bypasses RPC 503)
+### Provider Priority (FIXED - Uses eth_requestAccounts)
 
 ```typescript
-// getProvider() - Tries injected provider FIRST
 export async function getProvider() {
-  // 1. Injected provider first (avoids WalletConnect RPC entirely)
+  // 1. Injected provider first (triggers approval popup)
   if (typeof window !== 'undefined' && window.ethereum) {
-    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-    if (accounts.length > 0) {
-      console.log('✅ Using injected window.ethereum as provider');
+    const accounts = await window.ethereum.request({ 
+      method: 'eth_requestAccounts'  // ← KEY FIX!
+    }) as string[];
+    
+    if (accounts && accounts.length > 0) {
+      console.log('✅ Using injected window.ethereum:', accounts[0]);
       return window.ethereum; // Bypasses WalletConnect RPC!
     }
   }
@@ -74,52 +91,54 @@ export async function getProvider() {
   }
 
   // 3. Fresh from AppKit (last resort - may hit 503)
-  await ensureAppKit();
-  const provider = await _appKit.getProvider();
-  return provider;
+  const appKitInstance = await ensureAppKit();
+  return await appKitInstance.getProvider();
 }
 ```
 
-### Signer Priority (NEW - Bypasses RPC 503)
+### Signer Priority (FIXED - Uses eth_requestAccounts)
 
 ```typescript
-// getSigner() - Tries injected provider FIRST
 export async function getSigner() {
-  // 1. Try injected window.ethereum first (MetaMask mobile browser)
+  // 1. Try injected window.ethereum (triggers approval popup)
   if (typeof window !== 'undefined' && window.ethereum) {
-    const browserProvider = new ethers.BrowserProvider(window.ethereum);
-    const accounts = await browserProvider.listAccounts();
-    if (accounts.length > 0) {
-      console.log('✅ Got signer from injected window.ethereum');
+    const accounts = await window.ethereum.request({ 
+      method: 'eth_requestAccounts'  // ← KEY FIX!
+    }) as string[];
+    
+    if (accounts && accounts.length > 0) {
+      console.log('✅ Got signer from window.ethereum:', accounts[0]);
+      const browserProvider = new ethers.BrowserProvider(window.ethereum);
       return await browserProvider.getSigner(); // Bypasses WalletConnect RPC!
     }
   }
 
-  // 2. Try cached provider (WalletConnect)
-  if (walletState.cachedProvider && walletState.isProviderReady) {
-    const browserProvider = new ethers.BrowserProvider(walletState.cachedProvider);
-    return await browserProvider.getSigner();
-  }
-
-  // 3. Try fetching provider fresh from AppKit (may hit 503)
-  const appKitInstance = await ensureAppKit();
-  const provider = await appKitInstance.getProvider();
-  const browserProvider = new ethers.BrowserProvider(provider);
-  return await browserProvider.getSigner();
+  // 2. Cached WalletConnect provider (fallback)
+  // 3. Fresh AppKit provider (last resort)
 }
 ```
 
-### Mobile-Specific Error Message
+### Connect Wallet Shortcut (NEW)
 
 ```typescript
-// In SignUp.tsx error handler
-if (error.message?.includes('Failed to access wallet')) {
-  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-    errorMessage = 'On mobile, open this site inside the MetaMask app browser for best results. ' +
-      'Tap the 🌐 browser icon in MetaMask and navigate to this URL. ' +
-      'This bypasses WalletConnect relay issues.';
+// In WalletContext.tsx
+const connectWallet = async () => {
+  // ✅ If window.ethereum available, skip AppKit modal entirely
+  if (window.ethereum) {
+    const accounts = await window.ethereum.request({ 
+      method: 'eth_requestAccounts' 
+    });
+    
+    if (accounts.length > 0) {
+      setWalletAddress(accounts[0]);
+      // Done! No AppKit needed
+      return;
+    }
   }
-}
+
+  // Fallback: Open AppKit modal for WalletConnect
+  await openModal();
+};
 ```
 
 ---

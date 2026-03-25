@@ -16,7 +16,7 @@ const SignUp: React.FC = () => {
   const { toast } = useToast();
   const { isMetaMaskInstalled, connectWallet, isConnected, walletAddress, isConnecting } = useWallet();
   const { register } = useAuth();
-  const { signAndRegister, checkRegistration } = useBlockchain();
+  const { signAndRegister, checkRegistration, signAndUpdateLocation } = useBlockchain();
 
   const [step, setStep] = useState<'connect' | 'form'>('connect');
   const [formData, setFormData] = useState({

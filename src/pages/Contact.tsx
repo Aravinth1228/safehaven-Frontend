@@ -41,20 +41,20 @@ const Contact: React.FC = () => {
     {
       icon: <Mail className="w-6 h-6" />,
       title: 'Email',
-      value: 'support@safehaven.com',
-      link: 'mailto:support@safehaven.com',
+      value: 'Aravinth@gmail.com',
+      link: 'mailto:Aravinthkalai1228@gmail.com',
     },
     {
       icon: <Phone className="w-6 h-6" />,
-      title: 'Emergency Hotline',
-      value: '+1 (800) SAFE-NOW',
-      link: 'tel:+18007233669',
+      title: 'Phone Number',
+      value: '+91 70942 68363',
+      link: 'tel:+917094268363',
     },
     {
       icon: <MapPin className="w-6 h-6" />,
       title: 'Headquarters',
-      value: 'Global Safety Center, NYC',
-      link: '#',
+      value: ' KGISL Campus, Thudiyalur Road, Saravanampatti, Coimbatore, Tamil Nadu 641035',
+      link: 'https://maps.google.com/?q=3XMW+PVQ+KGISL+Campus,Thudiyalur+Road,Saravanampatti,Coimbatore',
     },
   ];
 

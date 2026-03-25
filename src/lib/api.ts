@@ -175,6 +175,9 @@ export const updateUserLocation = (location: {
 
 export const getAllLocations = () => fetchAPI("/locations");
 
+export const getLocationsByTouristId = (touristId: string) =>
+  fetchAPI(`/locations?tourist_id=${touristId}`);
+
 export const deleteLocation = (locationId: string) =>
   fetchAPI(`/locations/${locationId}`, { method: "DELETE" });
 
@@ -237,6 +240,7 @@ export const api = {
   locations: {
     update: updateUserLocation,
     getAll: getAllLocations,
+    getByTouristId: getLocationsByTouristId,
     delete: deleteLocation,
   },
   notifications: {

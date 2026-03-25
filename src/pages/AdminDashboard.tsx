@@ -432,7 +432,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleDeleteUser = async (user: Profile) => {
-    if (!confirm(`Delete ${user.username} permanently?\n\n⚠️ This action cannot be undone!\n\nThis will:\n- Delete user from Blockchain\n- Delete from MongoDB\n- Remove all alerts\n- Clear location history\n- Remove all notifications`)) {
+    if (!confirm(`Delete ${user.username} permanently?\n\n⚠️ This action cannot be undone!\n\nThis will:\n- Delete user from Blockchain\n- Delete from MongoDB\n- Remove all alerts\n- Clear ALL location history\n- Remove all notifications`)) {
       return;
     }
 
@@ -481,8 +481,29 @@ const AdminDashboard: React.FC = () => {
 
       console.log('✅ Blockchain deletion successful:', blockchainResult.transactionHash);
 
-      // Step 2: Delete from MongoDB (profile, alerts, locations, notifications)
-      console.log('📊 Step 2: Deleting from MongoDB...');
+      // Step 2: Delete user's locations from MongoDB first
+      console.log('📍 Step 2a: Deleting user locations...');
+      try {
+        // Get all locations for this user
+        const locationsResponse = await api.locations.getByTouristId(user.tourist_id);
+        const userLocations = locationsResponse.data || [];
+        
+        console.log(`📍 Found ${userLocations.length} location records to delete`);
+        
+        // Delete all locations
+        if (userLocations.length > 0) {
+          await Promise.all(
+            userLocations.map((loc: any) => api.locations.delete(loc.id || loc._id))
+          );
+          console.log('✅ All user locations deleted');
+        }
+      } catch (locationErr) {
+        console.warn('⚠️ Could not delete locations:', locationErr);
+        // Continue with user deletion even if location deletion fails
+      }
+
+      // Step 3: Delete from MongoDB (profile, alerts, notifications)
+      console.log('📊 Step 2b: Deleting from MongoDB...');
       const mongoResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'}/users/${user.user_id}`, {
         method: 'DELETE',
         headers: {
@@ -509,7 +530,7 @@ const AdminDashboard: React.FC = () => {
 
       toast({
         title: '✅ User Deleted Successfully',
-        description: `${user.username} has been deleted from blockchain and database.`,
+        description: `${user.username} has been deleted from blockchain, database, and all location data removed.`,
       });
 
       // Step 4: Reload data to sync (optional, since we already updated UI)

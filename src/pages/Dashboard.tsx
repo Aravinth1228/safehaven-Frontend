@@ -268,8 +268,6 @@ const Dashboard: React.FC = () => {
   }, [location, dangerZones]);
 
   // ── GPS Location tracking ──────────────────────────────────────────────────
-  const hasInitialLocationRef = useRef(false);
-
   useEffect(() => {
     if (!navigator.geolocation || !user?.id || !user?.touristId) return;
 
@@ -279,31 +277,20 @@ const Dashboard: React.FC = () => {
     // Desktop/WiFi: ~1-5km | Urban GPS: 10-50m | Open sky GPS: 3-10m
     const MAX_ACCEPTABLE_ACCURACY = 5000; // 5km — allow WiFi location for desktop users
 
-    const applyReading = (lat: number, lng: number, accuracy: number, isFirstFix: boolean = false) => {
+    const applyReading = (lat: number, lng: number, accuracy: number) => {
       setLocation({ lat, lng });
       setLocationAccuracy(accuracy);
       setLocationPermission('granted');
       setCurrentPlace({ lat, lng });
 
-      // Only show toast for significant improvements or excellent GPS, not on initial connection
-      if (isFirstFix) {
-        // First fix - only notify if accuracy is poor
-        if (accuracy > 500 && accuracy <= 5000) {
-          toast({ title: '⚠️ Weak GPS Signal', description: `±${Math.round(accuracy)}m — Move to open area for better accuracy.`, duration: 5000 });
-        } else if (accuracy > 5000) {
-          toast({ title: '📶 Network Location', description: `±${Math.round(accuracy / 1000)}km — Using network location (indoor/desktop)`, duration: 5000 });
-        }
-        // Don't show toast for good GPS on first fix (< 500m) - let map load silently
-      } else {
-        // Subsequent updates - only notify on significant improvements or issues
-        if (accuracy <= 20) {
-          toast({ title: '📍 GPS Locked', description: `±${Math.round(accuracy)}m — Excellent accuracy!`, duration: 3000 });
-        } else if (accuracy <= 50 && locationAccuracy && locationAccuracy > 100) {
-          toast({ title: '✅ GPS Improved', description: `±${Math.round(accuracy)}m — Good accuracy!`, duration: 3000 });
-        } else if (accuracy > 500 && (!locationAccuracy || accuracy > locationAccuracy)) {
-          toast({ title: '⚠️ Weak GPS Signal', description: `±${Math.round(accuracy)}m — Move to open area.`, duration: 5000 });
-        }
+      // NEVER show "GPS Locked" toast - it's annoying on mobile
+      // Only show warnings for poor accuracy
+      if (accuracy > 500 && accuracy <= 5000) {
+        toast({ title: '⚠️ Weak GPS Signal', description: `±${Math.round(accuracy)}m — Move to open area for better accuracy.`, duration: 5000 });
+      } else if (accuracy > 5000) {
+        toast({ title: '📶 Network Location', description: `±${Math.round(accuracy / 1000)}km — Using network location (indoor/desktop)`, duration: 5000 });
       }
+      // Good GPS (< 500m) = silent, no toast
     };
 
     const applyBestReading = (positions: GeolocationPosition[]) => {
@@ -324,9 +311,7 @@ const Dashboard: React.FC = () => {
       const best = goodReadings.reduce((a, b) =>
         a.coords.accuracy < b.coords.accuracy ? a : b
       );
-      const isFirstFix = !hasInitialLocationRef.current;
-      applyReading(best.coords.latitude, best.coords.longitude, best.coords.accuracy, isFirstFix);
-      if (isFirstFix) hasInitialLocationRef.current = true;
+      applyReading(best.coords.latitude, best.coords.longitude, best.coords.accuracy);
 
       api.locations.update({
         user_id: user.id, tourist_id: user.touristId,
@@ -348,9 +333,7 @@ const Dashboard: React.FC = () => {
             return; // don't setLocation — keep map in "Acquiring" state
           }
 
-          const isFirstFix = !hasInitialLocationRef.current;
-          applyReading(lat, lng, accuracy, isFirstFix);
-          if (isFirstFix) hasInitialLocationRef.current = true;
+          applyReading(lat, lng, accuracy);
         },
         (err) => {
           console.error('watchPosition error:', err.code, err.message);
@@ -436,6 +419,26 @@ const Dashboard: React.FC = () => {
     try {
       await updateStatus(newStatus);
       setStatus(newStatus);
+      
+      // Create alert in database when user sends emergency/alert
+      if (newStatus === 'alert' || newStatus === 'danger') {
+        try {
+          await api.alerts.create({
+            user_id: user.id,
+            tourist_id: user.touristId,
+            username: user.username || 'Unknown',
+            status: newStatus,
+            lat: location?.lat || null,
+            lng: location?.lng || null,
+            alert_type: newStatus === 'danger' ? 'emergency' : 'alert',
+          });
+          console.log('✅ Alert created in database');
+        } catch (alertErr) {
+          console.error('⚠️ Could not create alert:', alertErr);
+          // Continue even if alert creation fails
+        }
+      }
+      
       const msgs = {
         safe:   { title: 'Status Updated',   desc: 'You are marked as SAFE' },
         alert:  { title: 'Alert Requested',  desc: 'Help has been notified' },
